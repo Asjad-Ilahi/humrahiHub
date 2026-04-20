@@ -20,12 +20,126 @@
   --color-card: var(--card);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-archivo);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Archivo", var(--font-archivo), Arial, Helvetica, sans-serif;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroImagePulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes heroImageDrift {
+  0% {
+    transform: scale(1.02) translateX(0);
+  }
+  50% {
+    transform: scale(1.06) translateX(1.5%);
+  }
+  100% {
+    transform: scale(1.02) translateX(0);
+  }
+}
+
+@keyframes heroImageEnterFlipUp {
+  0% {
+    opacity: 0;
+    transform: translateY(100%) rotateX(-80deg) scale(1.02);
+    transform-origin: bottom center;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg) scale(1.02);
+    transform-origin: bottom center;
+  }
+}
+
+@keyframes heroImageExitFlipUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg) scale(1.02);
+    transform-origin: top center;
+  }
+  100% {
+    transform: translateY(-100%) rotateX(80deg) scale(1.02);
+    opacity: 0;
+    transform-origin: top center;
+  }
+}
+
+.animate-fade-slide-in {
+  animation: fadeSlideIn 700ms ease-out both;
+}
+
+.animate-hero-image-pulse {
+  animation: heroImagePulse 6s ease-in-out infinite;
+}
+
+.hero-image-base {
+  animation: heroImageDrift 7s ease-in-out infinite;
+  backface-visibility: hidden;
+}
+
+.hero-image-enter-flip-up {
+  animation: heroImageEnterFlipUp 900ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  backface-visibility: hidden;
+}
+
+.hero-image-exit-flip-up {
+  animation: heroImageExitFlipUp 900ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Scroll reveal: blur lift + optional clip for large text */
+.reveal-scroll-hidden {
+  opacity: 0;
+  transform: translateY(36px);
+  filter: blur(10px);
+}
+
+.reveal-scroll-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+.reveal-scroll-item {
+  will-change: opacity, transform, filter;
+}
+
+@keyframes trustStatRise {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trust-stat-surface {
+  animation: trustStatRise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
