@@ -15,6 +15,8 @@ export default function Home() {
       <div id="how-it-works">
         <HowHumrahiHubWorksSection />
       </div>
+
+      
       <div id="our-trust">
         <OurTrustSection />
       </div>
