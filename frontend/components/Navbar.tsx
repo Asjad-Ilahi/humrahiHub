@@ -29,11 +29,16 @@ export default function Navbar() {
           ))}
         </ul>
 
-        <Link href="/#cta">
-          <Button variant="joinNow" className="px-7 py-2.5 text-sm font-semibold">
-            Join Now
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/login" className="text-sm font-semibold text-secondary hover:text-text-secondary">
+            Log in
+          </Link>
+          <Link href="/auth">
+            <Button variant="joinNow" className="px-7 py-2.5 text-sm font-semibold">
+              Join Now
+            </Button>
+          </Link>
+        </div>
       </nav>
     </header>
   );

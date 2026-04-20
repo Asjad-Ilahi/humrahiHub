@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import AuthProvider from "@/features/auth/providers/AuthProvider";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -23,9 +24,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${archivo.variable} h-full antialiased`}>
       <body className={`${archivo.className} min-h-full flex flex-col`}>
-        <Navbar />
-        <div className="pt-24">{children}</div>
-        <Footer />
+        <AuthProvider>
+          <Navbar />
+          <div className="pt-24">{children}</div>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );
