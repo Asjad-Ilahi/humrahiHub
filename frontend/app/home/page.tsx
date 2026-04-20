@@ -2,10 +2,8 @@ import DemoHome from "@/features/auth/components/DemoHome";
 
 export default function HomeDashboardPage() {
   return (
-    <main className="min-h-screen bg-white px-6 pb-16 pt-10 text-text-primary md:px-10">
-      <section className="mx-auto w-full max-w-5xl rounded-[36px] border border-stroke bg-gradient-to-b from-card/70 to-white p-6 md:p-10">
-        <DemoHome />
-      </section>
+    <main className="min-h-screen bg-white">
+      <DemoHome />
     </main>
   );
 }

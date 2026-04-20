@@ -2,7 +2,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type ButtonVariant = "joinNow" | "walletInfo" | "donate" | "follow";
+type ButtonVariant = "joinNow" | "walletInfo" | "donate" | "follow" | "reportIssue" | "topup";
 
 type ButtonProps = {
   variant: ButtonVariant;
@@ -19,6 +19,10 @@ const variantClasses: Record<ButtonVariant, string> = {
     "rounded-full bg-primary text-secondary px-10 py-3 text-[30px] leading-none font-medium transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-md",
   follow:
     "rounded-full bg-[#e8e8e8] text-secondary px-8 py-3 text-[30px] leading-none font-medium transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-md",
+  reportIssue:
+    "rounded-[12px] bg-primary text-secondary px-5 py-2.5 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
+  topup:
+    "rounded-[12px] bg-primary text-secondary px-6 py-2.5 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
 };
 
 function WalletIcon() {
@@ -54,8 +58,9 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button type={type} className={`${variantClasses[variant]} ${className}`} {...props}>
-      <span className="inline-flex items-center justify-center gap-3">
+      <span className="inline-flex items-center justify-center gap-2">
         {variant === "walletInfo" && <WalletIcon />}
+        {variant === "reportIssue" && <span className="text-lg font-bold leading-none">+</span>}
         <span>{children}</span>
         {variant === "donate" && <DonateIcon />}
         {variant === "follow" && <span className="text-3xl leading-none">+</span>}

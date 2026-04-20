@@ -47,7 +47,7 @@ function buildProfilePayload(body) {
     postal_code: body.postalCode,
     city: body.city,
     country: body.country,
-    chain_id: Number(body.chainId || 8453),
+    chain_id: Number(body.chainId || 84532),
     wallet_address: body.walletAddress || null,
     smart_wallet_address: body.smartWalletAddress || null,
     latitude: typeof body.latitude === "number" && !Number.isNaN(body.latitude) ? body.latitude : null,

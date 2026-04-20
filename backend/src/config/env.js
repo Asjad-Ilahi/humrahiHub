@@ -8,6 +8,8 @@ const env = {
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   supabaseDbUrl: process.env.SUPABASE_DB_URL,
+  /** Min 32 chars; used to encrypt each issue fund wallet private key at create time. */
+  issueSignerSecret: process.env.ISSUE_SIGNER_SECRET,
 };
 
 module.exports = { env };

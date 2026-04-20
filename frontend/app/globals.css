@@ -143,3 +143,33 @@ body {
 .trust-stat-surface {
   animation: trustStatRise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+@keyframes reportHeroIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.report-hero-animate {
+  animation: reportHeroIn 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes reportFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.report-field-animate {
+  animation: reportFieldIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

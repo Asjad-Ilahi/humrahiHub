@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   postal_code TEXT NOT NULL,
   city TEXT NOT NULL,
   country TEXT NOT NULL,
-  chain_id INTEGER DEFAULT 8453,
+  chain_id INTEGER DEFAULT 84532,
   wallet_address TEXT,
   smart_wallet_address TEXT,
   latitude DOUBLE PRECISION,

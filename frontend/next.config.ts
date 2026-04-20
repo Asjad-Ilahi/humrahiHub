@@ -16,7 +16,33 @@ const permissionlessAliases: Record<string, string> = {
   "permissionless/clients/pimlico": path.join(permissionlessRoot, "_esm", "clients", "pimlico.js"),
 };
 
+let supabaseImageHost: string | undefined;
+try {
+  const u = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (u) supabaseImageHost = new URL(u).hostname;
+} catch {
+  supabaseImageHost = undefined;
+}
+
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "api.qrserver.com",
+        pathname: "/v1/create-qr-code/**",
+      },
+      ...(supabaseImageHost
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseImageHost,
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
+    ],
+  },
   transpilePackages: ["permissionless", "@privy-io/react-auth"],
   turbopack: {},
   webpack: (config) => {

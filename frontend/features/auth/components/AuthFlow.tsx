@@ -4,7 +4,12 @@ import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from
 import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
-import type { User } from "@privy-io/react-auth";
+import {
+  optimisticAddressFromSmartClient,
+  readEmbeddedWalletAddress,
+  readSmartWalletFromUserRecord,
+} from "@/features/auth/lib/privyWallet";
+import { resolveBestLatLngFromQuery, type LatLng } from "@/lib/geo";
 
 type ProfileForm = {
   firstName: string;
@@ -17,8 +22,6 @@ type ProfileForm = {
   city: string;
   country: string;
 };
-
-type LatLng = { latitude: number; longitude: number };
 
 const INITIAL_FORM: ProfileForm = {
   firstName: "",
@@ -91,181 +94,17 @@ function clearSignupSessionStorage() {
   sessionStorage.removeItem(SIGNUP_COORDS_KEY);
 }
 
-function isBrowserGeolocationContext(): boolean {
-  if (typeof window === "undefined") return false;
-  if (!("geolocation" in navigator)) return false;
-  return window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-}
-
-function getCurrentPositionPromise(options: PositionOptions): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      reject(new Error("Geolocation not supported"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, options);
-  });
-}
-
-/** First fix from watchPosition (often succeeds when getCurrentPosition times out). */
-function getFirstWatchPosition(timeoutMs: number): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      reject(new Error("Geolocation not supported"));
-      return;
-    }
-    let settled = false;
-    let watchId = 0;
-    const finish = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      navigator.geolocation.clearWatch(watchId);
-      fn();
-    };
-
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        finish(() => resolve(pos));
-      },
-      (err) => {
-        finish(() => reject(err));
-      },
-      { enableHighAccuracy: true, maximumAge: 0 }
-    );
-
-    window.setTimeout(() => {
-      finish(() => reject(new Error("watchPosition timeout")));
-    }, timeoutMs);
-  });
-}
-
-async function tryGpsCoordinates(): Promise<LatLng | null> {
-  if (!isBrowserGeolocationContext()) return null;
-
-  const attempts: PositionOptions[] = [
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 25000 },
-    { enableHighAccuracy: false, maximumAge: 120_000, timeout: 35000 },
-    { enableHighAccuracy: false, maximumAge: 600_000, timeout: 45000 },
-  ];
-
-  for (const opts of attempts) {
-    try {
-      const pos = await getCurrentPositionPromise(opts);
-      const { latitude, longitude } = pos.coords;
-      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-        return { latitude, longitude };
-      }
-    } catch {
-      /* try next */
-    }
-  }
-
-  try {
-    const pos = await getFirstWatchPosition(22000);
-    const { latitude, longitude } = pos.coords;
-    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-      return { latitude, longitude };
-    }
-  } catch {
-    /* fall through */
-  }
-
-  return null;
-}
-
-/** Forward geocode from the address the user typed (no GPS permission). Photon allows browser CORS. */
-async function geocodeAddressFromForm(details: ProfileForm): Promise<LatLng | null> {
+function buildGeocodeQuery(details: ProfileForm | null): string | null {
+  if (!details) return null;
   const q = [details.streetNumber, details.street, details.postalCode, details.city, details.country]
     .map((s) => String(s).trim())
     .filter(Boolean)
     .join(", ");
-  if (!q) return null;
-
-  try {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      features?: Array<{ geometry?: { coordinates?: [number, number] } }>;
-    };
-    const coords = data?.features?.[0]?.geometry?.coordinates;
-    if (!coords || coords.length < 2) return null;
-    const [lon, lat] = coords;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return { latitude: lat, longitude: lon };
-  } catch {
-    return null;
-  }
+  return q.length > 0 ? q : null;
 }
 
-/** Rough IP-based location when GPS and geocode fail (still non-null lat/lng for most users). */
-async function fetchIpApproxLocation(): Promise<LatLng | null> {
-  try {
-    const res = await fetch("https://get.geojs.io/v1/ip/geo.json");
-    if (!res.ok) return null;
-    const j = (await res.json()) as { latitude?: string; longitude?: string };
-    const lat = Number.parseFloat(String(j.latitude ?? ""));
-    const lon = Number.parseFloat(String(j.longitude ?? ""));
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return { latitude: lat, longitude: lon };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Best available coordinates: GPS (including watch retry), then address geocode, then IP.
- */
 async function resolveBestCoordinates(details: ProfileForm | null): Promise<LatLng | null> {
-  const gps = await tryGpsCoordinates();
-  if (gps) return gps;
-
-  if (details) {
-    const geo = await geocodeAddressFromForm(details);
-    if (geo) return geo;
-  }
-
-  return fetchIpApproxLocation();
-}
-
-function readEmbeddedWalletAddress(user: User | null | undefined): string | null {
-  if (!user) return null;
-  const embedded = user.wallet?.address;
-  if (embedded) return embedded;
-  const linked = user.linkedAccounts?.find((a) => a.type === "wallet");
-  if (linked && "address" in linked && typeof linked.address === "string") {
-    return linked.address;
-  }
-  return null;
-}
-
-function readLinkedSmartWalletAddress(user: User | null | undefined): string | null {
-  if (!user) return null;
-  const linked = user.linkedAccounts?.find((a) => a.type === "smart_wallet");
-  if (linked && "address" in linked && typeof linked.address === "string") {
-    return linked.address;
-  }
-  return null;
-}
-
-function readSmartWalletFromUserRecord(user: User | null | undefined): string | null {
-  if (!user) return null;
-  const fromLinked = readLinkedSmartWalletAddress(user);
-  if (fromLinked) return fromLinked;
-  const record = user as unknown as { smartWallet?: { address?: string } };
-  if (record.smartWallet?.address) return record.smartWallet.address;
-  return null;
-}
-
-function readOptimisticSmartAccountAddress(
-  client: { account?: { address?: string } } | undefined | null
-): string | null {
-  const addr = client?.account?.address;
-  return typeof addr === "string" && addr.length > 0 ? addr : null;
-}
-
-function optimisticAddressFromSmartClient(client: unknown): string | null {
-  return readOptimisticSmartAccountAddress(client as { account?: { address?: string } } | undefined);
+  return resolveBestLatLngFromQuery(buildGeocodeQuery(details));
 }
 
 export default function AuthFlow() {
@@ -377,7 +216,7 @@ export default function AuthFlow() {
         postalCode: submittedDetails.postalCode,
         city: submittedDetails.city,
         country: submittedDetails.country,
-        chainId: Number(process.env.NEXT_PUBLIC_BASE_CHAIN_ID ?? 8453),
+        chainId: Number(process.env.NEXT_PUBLIC_BASE_CHAIN_ID ?? 84532),
         walletAddress: eoa,
         smartWalletAddress: smart,
         latitude: coords?.latitude ?? null,
@@ -487,7 +326,7 @@ export default function AuthFlow() {
           <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Step 1</p>
           <h1 className="mt-3 text-3xl font-semibold text-secondary md:text-4xl">Tell us about yourself</h1>
           <p className="mt-4 max-w-2xl text-sm text-text-secondary md:text-base">
-            Add your details first. Then continue with Google or Email login to create your wallet and smart wallet on Base.
+            Add your details first. Then continue with Google or Email login to create your wallet and smart wallet on Base Sepolia.
           </p>
 
           <form onSubmit={onSubmitDetails} className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -526,7 +365,7 @@ export default function AuthFlow() {
           <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Step 2</p>
           <h2 className="mt-3 text-3xl font-semibold text-secondary">Secure login</h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-text-secondary">
-            Continue with Google or Email. We will create your wallets on Base and save your profile automatically.
+            Continue with Google or Email. We will create your wallets on Base Sepolia and save your profile automatically.
           </p>
           <div className="mt-7 flex justify-center">
             <button

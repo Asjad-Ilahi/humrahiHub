@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
 import Footer from "@/components/Footer";
-import Navbar from "@/components/Navbar";
+import SiteHeader from "@/components/SiteHeader";
 import AuthProvider from "@/features/auth/providers/AuthProvider";
 import "./globals.css";
 
@@ -25,7 +25,7 @@ export default function RootLayout({
     <html lang="en" className={`${archivo.variable} h-full antialiased`}>
       <body className={`${archivo.className} min-h-full flex flex-col`}>
         <AuthProvider>
-          <Navbar />
+          <SiteHeader />
           <div className="pt-24">{children}</div>
           <Footer />
         </AuthProvider>
