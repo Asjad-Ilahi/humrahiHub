@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --primary: #afff6f;
+  --secondary: #131313;
+  --text-primary: #131313;
+  --text-secondary: #707070;
+  --stroke: #e5e5e5;
+  --card: #f3f3f3;
+  --background: #ffffff;
+  --foreground: var(--text-primary);
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-stroke: var(--stroke);
+  --color-card: var(--card);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
