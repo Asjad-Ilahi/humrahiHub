@@ -15,11 +15,24 @@ const archivo = Archivo({
 const siteDescription =
   "HumRahi Hub connects communities around civic issues: report local problems, fund transparent fixes, and volunteer with clear accountability and progress you can follow.";
 
+function tryParseUrl(raw: string | undefined): URL | null {
+  if (!raw) return null;
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+}
+
 function defaultMetadataBase(): URL {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (explicit) return new URL(explicit);
+  const explicitUrl = tryParseUrl(explicit);
+  if (explicitUrl) return explicitUrl;
+
   const v = process.env.VERCEL_URL?.trim();
-  if (v) return new URL(`https://${v}`);
+  const vercelUrl = tryParseUrl(v ? `https://${v.replace(/^https?:\/\//, "")}` : undefined);
+  if (vercelUrl) return vercelUrl;
+
   return new URL("http://localhost:3000");
 }
 
