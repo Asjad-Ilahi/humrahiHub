@@ -81,7 +81,7 @@ export default function Hero() {
           >
             CONTACT US
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stroke transition-transform duration-300 group-hover:translate-x-1">
-              ↗
+              <Image src="/arrow.svg" alt="" width={16} height={16} className="opacity-80" />
             </span>
           </button>
         </div>

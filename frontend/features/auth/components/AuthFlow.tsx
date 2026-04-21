@@ -38,6 +38,8 @@ const INITIAL_FORM: ProfileForm = {
 /** Survives Privy OAuth full-page redirects (React state does not). */
 const SIGNUP_DRAFT_KEY = "humrahi_signup_profile_v1";
 const SIGNUP_COORDS_KEY = "humrahi_signup_coords_v1";
+const SIGNUP_DRAFT_KEY_FALLBACK = "humrahi_signup_profile_v1_persist";
+const SIGNUP_COORDS_KEY_FALLBACK = "humrahi_signup_coords_v1_persist";
 
 function isValidSignupDraft(value: unknown): value is ProfileForm {
   if (!value || typeof value !== "object") return false;
@@ -47,9 +49,9 @@ function isValidSignupDraft(value: unknown): value is ProfileForm {
 }
 
 function readSignupDraftFromStorage(): ProfileForm | null {
-  if (typeof sessionStorage === "undefined") return null;
+  if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(SIGNUP_DRAFT_KEY);
+    const raw = sessionStorage.getItem(SIGNUP_DRAFT_KEY) ?? localStorage.getItem(SIGNUP_DRAFT_KEY_FALLBACK);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     return isValidSignupDraft(parsed) ? parsed : null;
@@ -59,19 +61,23 @@ function readSignupDraftFromStorage(): ProfileForm | null {
 }
 
 function writeSignupDraftToStorage(details: ProfileForm) {
-  if (typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(details));
+  if (typeof window === "undefined") return;
+  const encoded = JSON.stringify(details);
+  sessionStorage.setItem(SIGNUP_DRAFT_KEY, encoded);
+  localStorage.setItem(SIGNUP_DRAFT_KEY_FALLBACK, encoded);
 }
 
 function writeSignupCoordsToStorage(coords: LatLng) {
-  if (typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(SIGNUP_COORDS_KEY, JSON.stringify(coords));
+  if (typeof window === "undefined") return;
+  const encoded = JSON.stringify(coords);
+  sessionStorage.setItem(SIGNUP_COORDS_KEY, encoded);
+  localStorage.setItem(SIGNUP_COORDS_KEY_FALLBACK, encoded);
 }
 
 function readSignupCoordsFromStorage(): LatLng | null {
-  if (typeof sessionStorage === "undefined") return null;
+  if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(SIGNUP_COORDS_KEY);
+    const raw = sessionStorage.getItem(SIGNUP_COORDS_KEY) ?? localStorage.getItem(SIGNUP_COORDS_KEY_FALLBACK);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { latitude?: number; longitude?: number };
     if (
@@ -89,9 +95,11 @@ function readSignupCoordsFromStorage(): LatLng | null {
 }
 
 function clearSignupSessionStorage() {
-  if (typeof sessionStorage === "undefined") return;
+  if (typeof window === "undefined") return;
   sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
   sessionStorage.removeItem(SIGNUP_COORDS_KEY);
+  localStorage.removeItem(SIGNUP_DRAFT_KEY_FALLBACK);
+  localStorage.removeItem(SIGNUP_COORDS_KEY_FALLBACK);
 }
 
 function buildGeocodeQuery(details: ProfileForm | null): string | null {
@@ -161,12 +169,6 @@ export default function AuthFlow() {
         } catch {
           // ignore and continue boot flow
         }
-      }
-
-      if (authenticated && !draft) {
-        router.replace("/home");
-        setBootstrapped(true);
-        return;
       }
 
       if (draft) {
@@ -341,10 +343,6 @@ export default function AuthFlow() {
 
   if (!ready || !bootstrapped) {
     return <div className="text-center text-sm text-text-secondary">Preparing secure sign-in...</div>;
-  }
-
-  if (authenticated && !submittedDetails && !readSignupDraftFromStorage()) {
-    return <div className="text-center text-sm text-text-secondary">Taking you home…</div>;
   }
 
   if (step === "details") {

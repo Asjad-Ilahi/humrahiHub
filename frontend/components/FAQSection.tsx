@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { useLandingContact } from "./LandingContactProvider";
 
@@ -70,7 +71,7 @@ export default function FAQSection() {
         >
           CONTACT US
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stroke transition-transform duration-300 group-hover:translate-x-0.5">
-            ↗
+            <Image src="/arrow.svg" alt="" width={12} height={12} className="opacity-80" />
           </span>
         </button>
       </div>
