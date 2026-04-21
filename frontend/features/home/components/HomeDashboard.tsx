@@ -198,8 +198,9 @@ export default function HomeDashboard({ variant = "default" }: { variant?: HomeD
 
   const issueStats = useMemo(() => {
     const totalRaisedCents = issues.reduce((acc, i) => acc + i.raisedCents, 0);
-    const activeProjects = issues.length;
-    const communitySupporters = issues.reduce((acc, i) => acc + i.supporters, 0);
+    const myIssues = issues.filter((i) => Boolean(user?.id) && i.creatorPrivyUserId === user?.id);
+    const activeProjects = myIssues.length;
+    const communitySupporters = myIssues.reduce((acc, i) => acc + i.supporters, 0);
     const totalRaised =
       pkrPerUsd != null
         ? formatPkrFromAmount(usdCentsToPkrAmount(totalRaisedCents, pkrPerUsd))
@@ -209,7 +210,7 @@ export default function HomeDashboard({ variant = "default" }: { variant?: HomeD
       activeProjects: String(activeProjects),
       communitySupporters: String(communitySupporters),
     };
-  }, [issues, pkrPerUsd]);
+  }, [issues, pkrPerUsd, user?.id]);
 
   const handleFollowChange = useCallback(
     async (issueId: string, nextFollowing: boolean) => {
