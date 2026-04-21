@@ -50,7 +50,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.post(
   "/api/coinbase/webhooks/onramp",
   express.raw({ type: "application/json" }),
