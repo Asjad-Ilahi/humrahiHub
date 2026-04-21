@@ -9,6 +9,9 @@ const { postCoinbaseOnrampWebhook } = require("./controllers/coinbaseWebhookCont
 
 const app = express();
 
+/** Behind Vercel / proxies so `req.ip` and secure cookies behave correctly. */
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.post(
   "/api/coinbase/webhooks/onramp",

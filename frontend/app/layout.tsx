@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
 import Footer from "@/components/Footer";
 import SiteHeader from "@/components/SiteHeader";
-import AuthProvider from "@/features/auth/providers/AuthProvider";
+import AuthProviderGate from "@/features/auth/providers/AuthProviderGate";
 import { HomeShellProvider } from "@/features/home/context/HomeShellContext";
 import "./globals.css";
 
@@ -71,13 +71,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${archivo.variable} h-full antialiased`}>
       <body className={`${archivo.className} min-h-full flex flex-col`}>
-        <AuthProvider>
+        <AuthProviderGate>
           <HomeShellProvider>
             <SiteHeader />
             <div className="pt-24">{children}</div>
             <Footer />
           </HomeShellProvider>
-        </AuthProvider>
+        </AuthProviderGate>
       </body>
     </html>
   );

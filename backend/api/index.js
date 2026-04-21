@@ -1,8 +1,10 @@
 /**
- * Vercel serverless entry: runs the same Express `app` as local `server.js`,
- * without starting `http.Server` or WebSockets (those require a long-running host).
+ * Vercel serverless entry: export the Express `app` directly.
+ * Vercel's Node runtime wraps `IncomingMessage` / `ServerResponse` for you.
+ *
+ * Do NOT use `serverless-http` here with its default AWS provider — that expects
+ * Lambda (event, context) and crashes on Vercel with FUNCTION_INVOCATION_FAILED.
  */
-const serverless = require("serverless-http");
 const { app } = require("../src/app");
 
-module.exports = serverless(app);
+module.exports = app;
