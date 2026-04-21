@@ -1,10 +1,40 @@
 /**
- * Vercel serverless entry: export the Express `app` directly.
- * Vercel's Node runtime wraps `IncomingMessage` / `ServerResponse` for you.
- *
- * Do NOT use `serverless-http` here with its default AWS provider — that expects
- * Lambda (event, context) and crashes on Vercel with FUNCTION_INVOCATION_FAILED.
+ * Vercel serverless entry with crash-safe lazy boot.
+ * If app import fails (env/module issue), return JSON 500 instead of
+ * FUNCTION_INVOCATION_FAILED so logs show the actual cause.
  */
-const { app } = require("../src/app");
+let cachedApp = null;
+let bootError = null;
 
-module.exports = app;
+function ensureAppLoaded() {
+  if (cachedApp || bootError) return;
+  try {
+    cachedApp = require("../src/app").app;
+  } catch (err) {
+    bootError = err;
+    // eslint-disable-next-line no-console
+    console.error("[backend] app boot failed:", err);
+  }
+}
+
+module.exports = (req, res) => {
+  ensureAppLoaded();
+
+  if (bootError) {
+    const message = bootError instanceof Error ? bootError.message : "Unknown boot error";
+    const stack = bootError instanceof Error ? bootError.stack : String(bootError);
+    res.statusCode = 500;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.end(
+      JSON.stringify({
+        error: "Backend boot failed.",
+        message,
+        // expose stack only outside production for easier debugging
+        ...(process.env.NODE_ENV === "production" ? {} : { stack }),
+      })
+    );
+    return;
+  }
+
+  return cachedApp(req, res);
+};

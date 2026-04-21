@@ -27,4 +27,14 @@ app.use(issueRoutes);
 app.use(volunteerRoutes);
 app.use(coinbaseRampRoutes);
 
+app.use((err, _req, res, _next) => {
+  // eslint-disable-next-line no-console
+  console.error("[backend] unhandled request error:", err);
+  if (res.headersSent) return;
+  const status = Number(err?.statusCode || err?.status || 500);
+  res.status(status >= 400 && status < 600 ? status : 500).json({
+    error: status >= 500 ? "Internal server error." : String(err?.message || "Request failed."),
+  });
+});
+
 module.exports = { app };
