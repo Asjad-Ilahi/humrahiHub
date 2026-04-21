@@ -10,7 +10,7 @@ const { listMyVolunteerEngagements } = require("../services/workProposalService"
 
 function assertSupabase(res) {
   if (!supabase) {
-    res.status(500).json({
+    res.status(503).json({
       error: "Supabase admin client is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env.",
     });
     return false;

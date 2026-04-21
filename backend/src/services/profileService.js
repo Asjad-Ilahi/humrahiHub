@@ -56,7 +56,9 @@ function buildProfilePayload(body) {
 }
 
 async function getProfileByPrivyUserId(privyUserId) {
+  if (!supabase) return { data: null, error: null };
   const { data, error } = await supabase.from("user_profiles").select("*").eq("privy_user_id", privyUserId).maybeSingle();
+  if (error && error.code === "42P01") return { data: null, error: null };
   return { data, error };
 }
 

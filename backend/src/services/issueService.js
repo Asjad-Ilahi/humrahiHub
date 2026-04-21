@@ -104,7 +104,10 @@ async function countInitiations(issueId) {
     .from("issue_initiation_votes")
     .select("*", { count: "exact", head: true })
     .eq("issue_id", issueId);
-  if (error) throw error;
+  if (error) {
+    if (error.code === "42P01") return 0;
+    throw error;
+  }
   return count ?? 0;
 }
 
@@ -174,19 +177,22 @@ async function listIssues(forPrivyUserId) {
       .from("issue_follows")
       .select("issue_id")
       .eq("privy_user_id", forPrivyUserId);
-    if (fErr) throw fErr;
+    if (fErr && fErr.code !== "42P01") throw fErr;
     (follows ?? []).forEach((f) => followingSet.add(f.issue_id));
 
     const { data: myInits, error: iErr } = await supabase
       .from("issue_initiation_votes")
       .select("issue_id")
       .eq("privy_user_id", forPrivyUserId);
-    if (iErr) throw iErr;
+    if (iErr && iErr.code !== "42P01") throw iErr;
     (myInits ?? []).forEach((r) => initiationVoteSet.add(r.issue_id));
   }
 
   const { data, error } = await supabase.from("issues").select(ISSUE_SELECT_FIELDS).order("created_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    if (error.code === "42P01") return [];
+    throw error;
+  }
   const rows = data ?? [];
   let donatedSet = new Set();
   if (forPrivyUserId && rows.length > 0) {
@@ -196,7 +202,7 @@ async function listIssues(forPrivyUserId) {
       .select("issue_id")
       .eq("privy_user_id", forPrivyUserId)
       .in("issue_id", ids);
-    if (!dErr) (drows ?? []).forEach((d) => donatedSet.add(d.issue_id));
+    if (!dErr || dErr.code === "42P01") (drows ?? []).forEach((d) => donatedSet.add(d.issue_id));
   }
   const withCounts = await Promise.all(
     rows.map(async (row) => {

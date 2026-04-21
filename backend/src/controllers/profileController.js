@@ -9,7 +9,7 @@ const {
 
 function assertSupabaseConfigured(res) {
   if (!supabase) {
-    res.status(500).json({
+    res.status(503).json({
       error:
         "Supabase admin client is not configured. In backend/.env set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (Dashboard → Settings → API → service_role). The anon/publishable key cannot be used for server upserts.",
     });
