@@ -1,10 +1,17 @@
-const { generateJwt } = require("@coinbase/cdp-sdk/auth");
 const { getAddress, isAddress } = require("viem");
 const { env } = require("../config/env");
 
 const FAUCET_HOST = "api.cdp.coinbase.com";
 const FAUCET_PATH = "/platform/v2/evm/faucet";
 const FAUCET_URL = `https://${FAUCET_HOST}${FAUCET_PATH}`;
+
+let generateJwtFn = null;
+async function getGenerateJwt() {
+  if (generateJwtFn) return generateJwtFn;
+  const mod = await import("@coinbase/cdp-sdk/auth");
+  generateJwtFn = mod.generateJwt;
+  return generateJwtFn;
+}
 
 function faucetConfigured() {
   return Boolean(env.cdpApiKeyId && env.cdpApiKeySecret);
@@ -23,6 +30,7 @@ async function requestBaseSepoliaUsdcOnce(destinationAddress) {
     return { ok: false, status: 400, detail: "Invalid address." };
   }
   const address = getAddress(destinationAddress);
+  const generateJwt = await getGenerateJwt();
   const jwt = await generateJwt({
     apiKeyId: env.cdpApiKeyId,
     apiKeySecret: env.cdpApiKeySecret,

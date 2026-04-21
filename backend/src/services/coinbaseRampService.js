@@ -1,4 +1,3 @@
-const { generateJwt } = require("@coinbase/cdp-sdk/auth");
 const { getAddress, isAddress } = require("viem");
 const { env } = require("../config/env");
 const { sanitizeClientIpForCoinbase } = require("../lib/publicClientIp");
@@ -9,6 +8,14 @@ const TOKEN_HOST = "api.developer.coinbase.com";
 const PAY_PRODUCTION = "https://pay.coinbase.com";
 /** Non-production Coinbase Pay; see https://docs.cdp.coinbase.com/onramp/additional-resources/sandbox-testing */
 const PAY_SANDBOX = "https://pay-sandbox.coinbase.com";
+
+let generateJwtFn = null;
+async function getGenerateJwt() {
+  if (generateJwtFn) return generateJwtFn;
+  const mod = await import("@coinbase/cdp-sdk/auth");
+  generateJwtFn = mod.generateJwt;
+  return generateJwtFn;
+}
 
 function payOrigin() {
   return env.coinbaseRampSandbox ? PAY_SANDBOX : PAY_PRODUCTION;
@@ -65,6 +72,7 @@ async function createSessionToken(destinationAddress, clientIp) {
     throw err;
   }
   const normalizedAddress = getAddress(destinationAddress);
+  const generateJwt = await getGenerateJwt();
 
   const jwt = await generateJwt({
     apiKeyId: env.cdpApiKeyId,
