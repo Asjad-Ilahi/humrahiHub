@@ -6,6 +6,18 @@
 let cachedApp = null;
 let bootError = null;
 
+function applyCorsHeaders(req, res) {
+  const origin = String(req?.headers?.origin || "").trim();
+  if (origin) {
+    res.setHeader("access-control-allow-origin", origin);
+    res.setHeader("vary", "origin");
+  } else {
+    res.setHeader("access-control-allow-origin", "*");
+  }
+  res.setHeader("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.setHeader("access-control-allow-headers", "Content-Type, Authorization, x-privy-user-id, x-admin-token");
+}
+
 function ensureAppLoaded() {
   if (cachedApp || bootError) return;
   try {
@@ -18,6 +30,13 @@ function ensureAppLoaded() {
 }
 
 module.exports = (req, res) => {
+  applyCorsHeaders(req, res);
+  if (String(req.method || "").toUpperCase() === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   ensureAppLoaded();
 
   if (bootError) {
