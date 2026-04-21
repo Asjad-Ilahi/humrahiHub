@@ -6,6 +6,7 @@ import { buildIssueChatWebSocketUrl } from "../lib/issueChatWsUrl";
 
 const LIME = "#B3FF66";
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
+const forcePolling = process.env.NEXT_PUBLIC_CHAT_POLLING_ONLY === "true";
 
 export type ChatMessageRow = {
   id: string;
@@ -36,7 +37,30 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
   const [sending, setSending] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const [pollingOnly, setPollingOnly] = useState(forcePolling);
+  const [chatReady, setChatReady] = useState(false);
+
+  const stopRealtime = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const loadMessages = useCallback(async () => {
+    const hist = await fetch(`${backendUrl}/api/issues/${encodeURIComponent(issueId)}/chat/messages`, {
+      headers: { "x-privy-user-id": privyUserId },
+    });
+    const hj = (await hist.json()) as { data?: ChatMessageRow[]; error?: string };
+    if (!hist.ok) throw new Error(hj.error ?? "Could not load messages.");
+    return hj.data ?? [];
+  }, [issueId, privyUserId]);
 
   const scrollBottom = useCallback(() => {
     const el = listRef.current;
@@ -53,10 +77,8 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
 
   useEffect(() => {
     if (!open || !canChat || !privyUserId) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      stopRealtime();
+      setChatReady(false);
       return;
     }
 
@@ -67,37 +89,42 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
       if (cancelled) return;
       setLoading(true);
       setBanner(null);
+      setChatReady(false);
       try {
-        const hist = await fetch(
-          `${backendUrl}/api/issues/${encodeURIComponent(issueId)}/chat/messages`,
-          { headers: { "x-privy-user-id": privyUserId } }
-        );
-        const hj = (await hist.json()) as { data?: ChatMessageRow[]; error?: string };
-        if (!hist.ok) {
-          if (!cancelled) setBanner(hj.error ?? "Could not load messages.");
-          if (!cancelled) setMessages([]);
+        const rows = await loadMessages();
+        if (!cancelled) setMessages(rows);
+
+        if (pollingOnly) {
+          pollRef.current = setInterval(() => {
+            void loadMessages()
+              .then((next) => {
+                if (!cancelled) setMessages(next);
+              })
+              .catch(() => {
+                /* keep silent; banner remains from initial load/send */
+              });
+          }, 4000);
+          if (!cancelled) setChatReady(true);
           return;
         }
-        if (!cancelled) setMessages(hj.data ?? []);
 
         const tokRes = await fetch(`${backendUrl}/api/issues/${encodeURIComponent(issueId)}/chat/token`, {
           method: "POST",
           headers: { "x-privy-user-id": privyUserId },
         });
         const tj = (await tokRes.json()) as { data?: { token?: string }; error?: string };
-        if (!tokRes.ok) {
-          if (!cancelled) setBanner(tj.error ?? "Could not open chat session.");
-          return;
-        }
+        if (!tokRes.ok) throw new Error(tj.error ?? "Could not open chat session.");
         const token = tj.data?.token;
-        if (!token) {
-          if (!cancelled) setBanner("Chat session unavailable.");
-          return;
-        }
+        if (!token) throw new Error("Chat session unavailable.");
 
         const ws = new WebSocket(buildIssueChatWebSocketUrl(token));
         wsRef.current = ws;
-
+        ws.onopen = () => {
+          if (!cancelled) {
+            setChatReady(true);
+            setBanner(null);
+          }
+        };
         ws.onmessage = (ev) => {
           let p: WsPayload;
           try {
@@ -121,7 +148,15 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
           }
         };
         ws.onerror = () => {
-          if (!cancelled) setBanner("WebSocket connection error.");
+          if (!cancelled) {
+            setPollingOnly(true);
+            setBanner("Realtime unavailable on this deployment; switched to live polling.");
+          }
+        };
+        ws.onclose = () => {
+          if (!cancelled && !pollRef.current) {
+            setPollingOnly(true);
+          }
         };
       } catch {
         if (!cancelled) setBanner("Could not reach chat.");
@@ -132,19 +167,33 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
 
     return () => {
       cancelled = true;
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      stopRealtime();
     };
-  }, [open, canChat, issueId, privyUserId]);
+  }, [open, canChat, issueId, privyUserId, pollingOnly, loadMessages, stopRealtime]);
 
-  const send = () => {
+  const send = async () => {
     const t = input.trim();
-    if (!t || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!t || !canChat || !privyUserId) return;
     setSending(true);
     try {
-      wsRef.current.send(JSON.stringify({ type: "send", text: t }));
+      if (!pollingOnly && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "send", text: t }));
+      } else {
+        const res = await fetch(`${backendUrl}/api/issues/${encodeURIComponent(issueId)}/chat/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-user-id": privyUserId,
+          },
+          body: JSON.stringify({ text: t }),
+        });
+        const j = (await res.json()) as { data?: ChatMessageRow; error?: string };
+        if (!res.ok) {
+          setBanner(j.error ?? "Could not send message.");
+          return;
+        }
+        setMessages((prev) => [...prev, j.data as ChatMessageRow]);
+      }
       setInput("");
     } finally {
       setSending(false);
@@ -243,7 +292,7 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
                 <button
                   type="button"
                   onClick={send}
-                  disabled={sending || !input.trim()}
+                  disabled={sending || !input.trim() || !chatReady}
                   className="inline-flex size-12 shrink-0 items-center justify-center rounded-full font-semibold text-secondary transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
                   style={{ backgroundColor: LIME }}
                   aria-label="Send"
@@ -251,6 +300,7 @@ export default function IssueCommunityChat({ issueId, open, onClose, canChat, pr
                   {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
                 </button>
               </div>
+              {!chatReady ? <p className="mt-2 text-xs text-text-secondary">Connecting chat…</p> : null}
             </div>
           </>
         )}

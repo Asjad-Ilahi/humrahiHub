@@ -10,6 +10,7 @@ const {
   updatePhase,
   getIssueById,
   listIssueChatMessages,
+  insertIssueChatMessage,
   recordDonationFromTx,
   userHasDonatedToIssue,
   listMyFollowedIssueSummaries,
@@ -179,6 +180,28 @@ async function getChatMessages(req, res) {
   }
 }
 
+async function postChatMessage(req, res) {
+  if (!assertSupabase(res)) return;
+  const text = String(req.body?.text ?? "").trim();
+  if (!text) return res.status(400).json({ error: "Message text is required." });
+  try {
+    const donated = await userHasDonatedToIssue(req.params.issueId, req.privyUserId);
+    const following = await isFollowing(req.params.issueId, req.privyUserId);
+    if (!donated && !following) {
+      return res.status(403).json({ error: "Follow this issue or donate to send messages." });
+    }
+    const row = await insertIssueChatMessage({
+      issueId: req.params.issueId,
+      privyUserId: req.privyUserId,
+      body: text,
+    });
+    if (!row) return res.status(400).json({ error: "Message must be 1-2000 characters." });
+    return res.status(201).json({ data: row });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
 async function postIssue(req, res) {
   if (!assertSupabase(res)) return;
   const creatorPrivyUserId = req.privyUserId;
@@ -320,6 +343,7 @@ module.exports = {
   postDonate,
   postChatToken,
   getChatMessages,
+  postChatMessage,
   patchIssueTarget,
   patchIssuePhase,
   upload,

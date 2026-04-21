@@ -18,6 +18,7 @@ router.post("/api/issues", requirePrivyUserId, ctrl.upload.single("image"), ctrl
 router.post("/api/issues/:issueId/donate", requirePrivyUserId, ctrl.postDonate);
 router.post("/api/issues/:issueId/chat/token", requirePrivyUserId, ctrl.postChatToken);
 router.get("/api/issues/:issueId/chat/messages", requirePrivyUserId, ctrl.getChatMessages);
+router.post("/api/issues/:issueId/chat/messages", requirePrivyUserId, ctrl.postChatMessage);
 router.post("/api/issues/:issueId/initiate", requirePrivyUserId, ctrl.postInitiate);
 router.post("/api/issues/:issueId/follow", requirePrivyUserId, ctrl.postFollow);
 router.post("/api/issues/:issueId/unfollow", requirePrivyUserId, ctrl.postUnfollow);
