@@ -46,9 +46,23 @@ export default function OpenGraphImage() {
           </div>
           <span style={{ fontSize: 42, fontWeight: 700, color: "#f5f5f5", letterSpacing: -1 }}>HumRahi Hub</span>
         </div>
-        <div style={{ fontSize: 64, fontWeight: 800, color: "#ffffff", lineHeight: 1.08, maxWidth: 900 }}>
-          See a problem.
-          <span style={{ color: "#afff6f" }}> Share it.</span> Solve it together.
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+            gap: 12,
+            fontSize: 64,
+            fontWeight: 800,
+            color: "#ffffff",
+            lineHeight: 1.08,
+            maxWidth: 900,
+          }}
+        >
+          <div style={{ display: "flex" }}>See a problem.</div>
+          <div style={{ display: "flex", color: "#afff6f" }}>Share it.</div>
+          <div style={{ display: "flex" }}>Solve it together.</div>
         </div>
         <div style={{ marginTop: 28, fontSize: 26, color: "#a3a3a3", maxWidth: 820, lineHeight: 1.4 }}>
           A social impact platform that connects people who report local issues with funders and volunteers—transparently.
