@@ -63,7 +63,7 @@ export default function DashboardHero({ firstName, lastName, profileLoading, sta
                 Welcome back, {displayName}!
               </h1>
             ) : (
-              <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Welcome back!</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-black md:text-3xl">Welcome back!</h1>
             )}
             <p className="mt-2 max-w-2xl text-sm font-normal leading-relaxed text-[#666666] md:text-[15px]">
               Amounts on the dashboard are shown in Pakistani rupees (PKR). Your wallet balance is USDC on Base Sepolia.

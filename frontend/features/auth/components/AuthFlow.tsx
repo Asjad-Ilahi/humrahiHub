@@ -134,29 +134,59 @@ export default function AuthFlow() {
   latestRef.current = { user, smartWalletClient };
 
   const prevAuthenticatedRef = useRef<boolean | null>(null);
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
 
   useLayoutEffect(() => {
     if (!ready) return;
     const draft = readSignupDraftFromStorage();
+    let cancelled = false;
 
-    if (authenticated && !draft) {
-      router.replace("/home");
+    const boot = async () => {
+      if (authenticated && user?.id) {
+        try {
+          const res = await fetch(`${backendUrl}/api/profiles/${encodeURIComponent(user.id)}`);
+          if (cancelled) return;
+          if (res.ok) {
+            const body = (await res.json()) as { data?: Record<string, unknown> | null };
+            const row = body?.data;
+            const first = String(row?.first_name ?? "").trim();
+            const last = String(row?.last_name ?? "").trim();
+            if (first || last) {
+              clearSignupSessionStorage();
+              router.replace("/home");
+              setBootstrapped(true);
+              return;
+            }
+          }
+        } catch {
+          // ignore and continue boot flow
+        }
+      }
+
+      if (authenticated && !draft) {
+        router.replace("/home");
+        setBootstrapped(true);
+        return;
+      }
+
+      if (draft) {
+        setSubmittedDetails(draft);
+        setForm(draft);
+        setStep("login");
+        waitStartRef.current = null;
+        persistStartedRef.current = false;
+        const storedCoords = readSignupCoordsFromStorage();
+        if (storedCoords) prefetchedCoordsRef.current = storedCoords;
+      }
+
       setBootstrapped(true);
-      return;
-    }
+    };
 
-    if (draft) {
-      setSubmittedDetails(draft);
-      setForm(draft);
-      setStep("login");
-      waitStartRef.current = null;
-      persistStartedRef.current = false;
-      const storedCoords = readSignupCoordsFromStorage();
-      if (storedCoords) prefetchedCoordsRef.current = storedCoords;
-    }
-
-    setBootstrapped(true);
-  }, [ready, authenticated, router]);
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, authenticated, user?.id, router, backendUrl]);
 
   useEffect(() => {
     const prev = prevAuthenticatedRef.current;
@@ -176,8 +206,6 @@ export default function AuthFlow() {
     if (linkedOrUser) return linkedOrUser;
     return optimisticAddressFromSmartClient(smartWalletClient);
   }, [user, smartWalletClient]);
-
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
 
   const persistProfileOnce = async () => {
     if (persistInFlightRef.current) return;
@@ -366,6 +394,9 @@ export default function AuthFlow() {
           <h2 className="mt-3 text-3xl font-semibold text-secondary">Secure login</h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-text-secondary">
             Continue with Google or Email. We will create your wallets on Base Sepolia and save your profile automatically.
+          </p>
+          <p className="mt-2 text-sm text-text-secondary">
+            If you already signed up, logging in with the same account will load your existing data directly.
           </p>
           <div className="mt-7 flex justify-center">
             <button
