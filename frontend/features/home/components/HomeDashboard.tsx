@@ -4,15 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Filter, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
-import { createPublicClient, http, isAddress } from "viem";
-import { appChain, getAppChainRpcUrl } from "@/lib/chain";
+import { isAddress } from "viem";
+import { createAppChainPublicReadClient } from "@/lib/chain";
 import {
   optimisticAddressFromSmartClient,
-  readEmbeddedWalletAddress,
-  readSmartWalletFromUserRecord,
+  readSmartWalletAddressForBalance,
+  resolveSmartWalletClientForReads,
+  smartWalletAddressFromUserRoot,
+  stablePrivyWalletLinkedJson,
 } from "@/features/auth/lib/privyWallet";
 import { formatUsdFromCents } from "../lib/formatUsd";
-import { fetchPkrPerUsd, formatPkrFromAmount, usdCentsToPkrAmount } from "@/lib/fxPkr";
+import {
+  DEFAULT_PKR_PER_USD,
+  fetchPkrPerUsd,
+  formatPkrFromAmount,
+  usdCentsToPkrAmount,
+} from "@/lib/fxPkr";
 import { readUsdcBalance, formatUsdcUnits } from "@/lib/usdcBaseSepolia";
 import { ALL_PHASES, countByCategory, filterAndSortIssues } from "../lib/filterIssues";
 import type { ApiIssueRow } from "../lib/mapApiIssue";
@@ -44,10 +51,6 @@ function parseProfileCoords(data: unknown): { lat: number; lng: number } | null 
   if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
   if (la < -90 || la > 90 || lo < -180 || lo > 180) return null;
   return { lat: la, lng: lo };
-}
-
-function createAppChainPublicClient() {
-  return createPublicClient({ chain: appChain, transport: http(getAppChainRpcUrl()) });
 }
 
 const CATEGORY_ORDER: Array<IssueCategory | "all"> = [
@@ -98,19 +101,31 @@ const PAGE_SIZE = 6;
 
 export default function HomeDashboard() {
   const { ready, authenticated, user } = usePrivy();
-  const { client: smartWalletClient } = useSmartWallets();
+  const { client: smartWalletClient, getClientForChain } = useSmartWallets();
 
   const [profileFirstName, setProfileFirstName] = useState<string | null>(null);
   const [profileLastName, setProfileLastName] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [balanceLabel, setBalanceLabel] = useState("—");
+  const [balanceSubline, setBalanceSubline] = useState("");
   const [balanceLoading, setBalanceLoading] = useState(true);
+  /** On-chain USDC (human, 6 decimals); null = not loaded or error. */
+  const [usdcOnChain, setUsdcOnChain] = useState<number | null>(null);
+
+  const userRef = useRef(user);
+  const smartWalletClientRef = useRef(smartWalletClient);
+  const getClientForChainRef = useRef(getClientForChain);
+  userRef.current = user;
+  smartWalletClientRef.current = smartWalletClient;
+  getClientForChainRef.current = getClientForChain;
 
   const [rawIssueRows, setRawIssueRows] = useState<ApiIssueRow[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(true);
   const [issuesError, setIssuesError] = useState<string | null>(null);
   const [viewerPos, setViewerPos] = useState<{ lat: number; lng: number } | null>(null);
   const [pkrPerUsd, setPkrPerUsd] = useState<number | null>(null);
+  const [balanceTick, setBalanceTick] = useState(0);
+  const [walletNotice, setWalletNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +140,12 @@ export default function HomeDashboard() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const onRefresh = () => setBalanceTick((t) => t + 1);
+    window.addEventListener("humrahi:refresh-wallet-balance", onRefresh);
+    return () => window.removeEventListener("humrahi:refresh-wallet-balance", onRefresh);
   }, []);
 
   const refreshIssues = useCallback(async () => {
@@ -288,48 +309,146 @@ export default function HomeDashboard() {
     };
   }, [ready, authenticated, user?.id]);
 
-  const walletReadKey = useMemo(() => {
-    const smart = readSmartWalletFromUserRecord(user) ?? optimisticAddressFromSmartClient(smartWalletClient);
-    const embedded = readEmbeddedWalletAddress(user);
-    return `${smart ?? ""}|${embedded ?? ""}`;
-  }, [user, smartWalletClient]);
+  const optimisticAddr = optimisticAddressFromSmartClient(smartWalletClient) ?? "";
+  const linkedJson = stablePrivyWalletLinkedJson(user);
+  const recordSwLower = smartWalletAddressFromUserRoot(user).toLowerCase();
+  const walletReadKey = useMemo(
+    () =>
+      [
+        user?.id ?? "",
+        (user?.wallet?.address ?? "").toLowerCase(),
+        linkedJson,
+        recordSwLower,
+        optimisticAddr.toLowerCase(),
+      ].join("|"),
+    [user?.id, user?.wallet?.address, linkedJson, recordSwLower, optimisticAddr]
+  );
 
   useEffect(() => {
-    if (!ready || !authenticated || !user) {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("coinbase_onramp") !== "1") return;
+    if (!ready || !authenticated || !user?.id) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("coinbase_onramp");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+
+    let cancelled = false;
+    const privyUserId = user.id;
+    void (async () => {
+      const u = userRef.current;
+      const sw = await resolveSmartWalletClientForReads(
+        smartWalletClientRef.current,
+        (args) => getClientForChainRef.current(args)
+      );
+      const addr = readSmartWalletAddressForBalance(u, sw);
+      if (!addr || !isAddress(addr)) {
+        if (!cancelled) setWalletNotice("Smart wallet not ready; could not sync Base Sepolia USDC.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${backendUrl}/api/coinbase/credit-sepolia-usdc`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-user-id": privyUserId,
+          },
+          body: JSON.stringify({ destinationAddress: addr }),
+        });
+        const json = (await res.json()) as {
+          data?: { creditedDrips?: number; throttled?: boolean };
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          setWalletNotice(json.error ?? "Could not credit Base Sepolia USDC.");
+          return;
+        }
+        if (json.data?.throttled) {
+          setWalletNotice("Automatic testnet credit skipped (try again in about 90 seconds).");
+          return;
+        }
+        const d = json.data?.creditedDrips ?? 0;
+        if (d > 0) {
+          setWalletNotice(
+            `Added ${d} testnet USDC on Base Sepolia (CDP v2 faucet). PKR above reflects your smart wallet balance.`
+          );
+          setBalanceTick((t) => t + 1);
+        } else {
+          setWalletNotice(
+            "Returned from Coinbase, but no testnet USDC was added (faucet limit or CDP error). Check backend logs and try again in a minute."
+          );
+        }
+      } catch {
+        if (!cancelled) setWalletNotice("Could not reach the server to credit testnet USDC.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, authenticated, user?.id]);
+
+  useEffect(() => {
+    if (!ready || !authenticated || !user?.id) {
       setBalanceLoading(false);
       setBalanceLabel("—");
+      setBalanceSubline("");
+      setUsdcOnChain(null);
       return;
     }
     let cancelled = false;
     setBalanceLoading(true);
-    (async () => {
+    setUsdcOnChain(null);
+    void (async () => {
       try {
-        const addr =
-          readSmartWalletFromUserRecord(user) ??
-          optimisticAddressFromSmartClient(smartWalletClient) ??
-          readEmbeddedWalletAddress(user);
+        const u = userRef.current;
+        const sw = await resolveSmartWalletClientForReads(
+          smartWalletClientRef.current,
+          (args) => getClientForChainRef.current(args)
+        );
+        const addr = readSmartWalletAddressForBalance(u, sw);
         if (!addr || !isAddress(addr)) {
           if (!cancelled) {
             setBalanceLabel("—");
+            setBalanceSubline("Smart wallet address not ready yet — try again in a moment.");
+            setUsdcOnChain(null);
             setBalanceLoading(false);
           }
           return;
         }
-        const client = createAppChainPublicClient();
+        const client = createAppChainPublicReadClient();
         const usdcUnits = await readUsdcBalance(client, addr as `0x${string}`);
         if (cancelled) return;
         const usdc = Number(formatUsdcUnits(usdcUnits));
         if (!Number.isFinite(usdc)) {
-          setBalanceLabel("—");
+          if (!cancelled) {
+            setBalanceLabel("—");
+            setBalanceSubline("Could not parse USDC balance.");
+            setUsdcOnChain(null);
+          }
           return;
         }
-        if (pkrPerUsd != null && pkrPerUsd > 0) {
-          setBalanceLabel(formatPkrFromAmount(usdc * pkrPerUsd, { maximumFractionDigits: 0 }));
-        } else {
-          setBalanceLabel(`${usdc.toFixed(2)} USDC`);
+        const usdcStr = usdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        if (!cancelled) {
+          setUsdcOnChain(usdc);
+          setBalanceSubline(
+            `${usdcStr} USDC on Base Sepolia · smart wallet ${addr.slice(0, 6)}…${addr.slice(-4)}`
+          );
         }
-      } catch {
-        if (!cancelled) setBalanceLabel("—");
+      } catch (e) {
+        if (!cancelled) {
+          setBalanceLabel("—");
+          setUsdcOnChain(null);
+          const hint = e instanceof Error ? e.message : String(e);
+          setBalanceSubline(
+            hint
+              ? `Could not reach Base Sepolia RPC: ${hint.slice(0, 140)}`
+              : "Could not reach Base Sepolia RPC. The app will retry via its proxy and public Base RPC."
+          );
+        }
       } finally {
         if (!cancelled) setBalanceLoading(false);
       }
@@ -337,7 +456,47 @@ export default function HomeDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [ready, authenticated, user, walletReadKey, pkrPerUsd]);
+  }, [ready, authenticated, user?.id, walletReadKey, balanceTick]);
+
+  useEffect(() => {
+    if (usdcOnChain == null || !Number.isFinite(usdcOnChain)) {
+      return;
+    }
+    const applyRate = (rate: number) => {
+      const pkrRaw = usdcOnChain * rate;
+      const pkrRounded = Math.round(pkrRaw);
+      const pkrDisplay = usdcOnChain > 0 && pkrRounded === 0 ? 1 : pkrRounded;
+      const next = formatPkrFromAmount(pkrDisplay, { maximumFractionDigits: 0 });
+      setBalanceLabel((prev) => (prev === next ? prev : next));
+    };
+
+    let cancelled = false;
+    const immediate =
+      pkrPerUsd != null && Number.isFinite(pkrPerUsd) && pkrPerUsd > 0 ? pkrPerUsd : null;
+    if (immediate != null) {
+      applyRate(immediate);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    applyRate(DEFAULT_PKR_PER_USD);
+    void (async () => {
+      let rate: number | null = null;
+      try {
+        rate = await fetchPkrPerUsd();
+      } catch {
+        rate = DEFAULT_PKR_PER_USD;
+      }
+      if (rate == null || !Number.isFinite(rate) || rate <= 0) {
+        rate = DEFAULT_PKR_PER_USD;
+      }
+      if (!cancelled) applyRate(rate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [usdcOnChain, pkrPerUsd]);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<IssueCategory | "all">("all");
@@ -463,8 +622,13 @@ export default function HomeDashboard() {
           communitySupporters: issueStats.communitySupporters,
           balance: balanceLabel,
           balanceLoading: balanceLoading,
+          balanceSubline,
         }}
       />
+
+      {walletNotice && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">{walletNotice}</p>
+      )}
 
       {issuesError && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{issuesError}</p>

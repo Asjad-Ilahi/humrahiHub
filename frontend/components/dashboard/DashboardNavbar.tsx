@@ -6,14 +6,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
+import { isAddress } from "viem";
 import { Copy, Check } from "lucide-react";
 import Button from "@/components/Button";
 import {
-  optimisticAddressFromSmartClient,
   readEmbeddedWalletAddress,
-  readSmartWalletFromUserRecord,
+  readSmartWalletAddressForBalance,
 } from "@/features/auth/lib/privyWallet";
 import { APP_CHAIN_NAME } from "@/lib/chain";
+
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
+/** Match backend default: sandbox unless COINBASE_RAMP_SANDBOX=false */
+const showCoinbaseSandboxHint = process.env.NEXT_PUBLIC_COINBASE_RAMP_SANDBOX !== "false";
 
 type ProfileTab = "details" | "volunteer" | "settings";
 
@@ -50,16 +54,16 @@ export default function DashboardNavbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileTab, setProfileTab] = useState<ProfileTab>("details");
   const [copied, setCopied] = useState(false);
-  const [topupHint, setTopupHint] = useState(false);
+  const [rampBusy, setRampBusy] = useState<"on" | "off" | null>(null);
+  const [rampError, setRampError] = useState<string | null>(null);
 
   const walletRef = useDismissRef(walletOpen, () => setWalletOpen(false));
   const profileRef = useDismissRef(profileOpen, () => setProfileOpen(false));
 
-  const smartAddress = useMemo(() => {
-    const fromUser = readSmartWalletFromUserRecord(user);
-    if (fromUser) return fromUser;
-    return optimisticAddressFromSmartClient(smartWalletClient);
-  }, [user, smartWalletClient]);
+  const smartAddress = useMemo(
+    () => readSmartWalletAddressForBalance(user, smartWalletClient),
+    [user, smartWalletClient]
+  );
 
   const embedded = useMemo(() => readEmbeddedWalletAddress(user), [user]);
 
@@ -73,6 +77,64 @@ export default function DashboardNavbar() {
       /* ignore */
     }
   }, [smartAddress]);
+
+  const openCoinbaseRamp = useCallback(
+    async (flow: "onramp" | "offramp") => {
+      if (!user?.id) return;
+      const addr = smartAddress;
+      if (!addr || !isAddress(addr as `0x${string}`)) {
+        setRampError("Smart wallet address is not ready yet.");
+        return;
+      }
+      setRampError(null);
+      setRampBusy(flow === "onramp" ? "on" : "off");
+      if (flow === "onramp") {
+        void fetch(`${backendUrl}/api/coinbase/credit-sepolia-usdc`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-user-id": user.id,
+          },
+          body: JSON.stringify({ destinationAddress: addr }),
+        })
+          .then((creditRes) => {
+            if (creditRes.ok) {
+              window.dispatchEvent(new Event("humrahi:refresh-wallet-balance"));
+            }
+          })
+          .catch(() => {});
+      }
+      try {
+        const res = await fetch(`${backendUrl}/api/coinbase/ramp-session`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-user-id": user.id,
+          },
+          body: JSON.stringify({
+            flow,
+            destinationAddress: addr,
+          }),
+        });
+        const json = (await res.json()) as { data?: { url?: string }; error?: string };
+        if (!res.ok) {
+          setRampError(json.error ?? "Could not start Coinbase session.");
+          return;
+        }
+        const url = json.data?.url;
+        if (!url || typeof url !== "string") {
+          setRampError("Unexpected response from the server.");
+          return;
+        }
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch {
+        setRampError("Could not reach the API.");
+      } finally {
+        setRampBusy(null);
+      }
+    },
+    [user?.id, smartAddress]
+  );
 
   const qrSrc = smartAddress
     ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(smartAddress)}`
@@ -144,27 +206,32 @@ export default function DashboardNavbar() {
                 </div>
               )}
 
-              <div className="mt-4">
+              <div className="mt-4 space-y-2 border-t border-stroke pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Coinbase ramp</p>
+
                 <Button
                   type="button"
                   variant="topup"
                   className="w-full"
-                  onClick={() => {
-                    setTopupHint(true);
-                    window.setTimeout(() => setTopupHint(false), 2500);
-                  }}
+                  disabled={!user?.id || rampBusy !== null}
+                  onClick={() => void openCoinbaseRamp("onramp")}
                 >
-                  Topup
+                  {rampBusy === "on" ? "Opening…" : "Add funds (PKR → USDC)"}
                 </Button>
-                {topupHint && (
-                  <p className="mt-2 text-center text-xs text-text-secondary">Use your exchange or wallet app to send funds to this address.</p>
-                )}
-              </div>
-              {embedded && (
-                <p className="mt-3 border-t border-stroke pt-3 text-[11px] text-text-secondary">
-                  Embedded signer: <span className="font-mono text-secondary">{embedded.slice(0, 10)}…</span>
+                <Button
+                  type="button"
+                  variant="withdraw"
+                  className="w-full"
+                  disabled={!user?.id || rampBusy !== null}
+                  onClick={() => void openCoinbaseRamp("offramp")}
+                >
+                  {rampBusy === "off" ? "Opening…" : "Withdraw to bank / Coinbase"}
+                </Button>
+                {rampError ? <p className="text-center text-xs text-red-700">{rampError}</p> : null}
+                <p className="text-center text-[11px] text-text-secondary">
+                  Or send USDC to the address above from any wallet.
                 </p>
-              )}
+              </div>
             </div>
           </div>
 

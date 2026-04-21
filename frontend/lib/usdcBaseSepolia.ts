@@ -1,8 +1,13 @@
 import type { PublicClient } from "viem";
-import { encodeFunctionData, formatUnits, parseUnits } from "viem";
+import { encodeFunctionData, formatUnits, getAddress, parseUnits } from "viem";
 
-/** Circle USDC on Base Sepolia (testnet). */
-export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7927321ec2312B14dce8" as const;
+/**
+ * Circle USDC on Base Sepolia (chain 84532).
+ * @see https://developers.circle.com/stablecoins/usdc-contract-addresses
+ *
+ * Note: An older/incorrect constant (`…7927321ec2312B14dce8`) fails EIP-55 checks in viem and breaks `readContract`.
+ */
+export const USDC_BASE_SEPOLIA = getAddress("0x036cbd53842c5426634e7929541ec2318f3dcf7e");
 
 const erc20Abi = [
   {

@@ -6,7 +6,10 @@
 let cache: { pkrPerUsd: number; fetchedAt: number } | null = null;
 const TTL_MS = 45 * 60 * 1000;
 
-const CLIENT_FALLBACK_PKR_PER_USD = 280;
+/** Used when FX APIs fail or rate has not loaded yet (USDC ≈ USD). */
+export const DEFAULT_PKR_PER_USD = 280;
+
+const CLIENT_FALLBACK_PKR_PER_USD = DEFAULT_PKR_PER_USD;
 
 async function fetchPkrFromSameOriginApi(): Promise<number | null> {
   if (typeof window === "undefined") return null;

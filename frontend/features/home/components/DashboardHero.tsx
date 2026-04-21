@@ -6,6 +6,7 @@ type Stat = {
   label: string;
   iconSrc: string;
   value: string;
+  balanceSubline?: string;
 };
 
 const STATS_META: Omit<Stat, "value">[] = [
@@ -25,6 +26,8 @@ type Props = {
     communitySupporters: string;
     balance: string;
     balanceLoading: boolean;
+    /** USDC amount + network + address snippet (smart wallet). */
+    balanceSubline?: string;
   };
 };
 
@@ -41,6 +44,7 @@ export default function DashboardHero({ firstName, lastName, profileLoading, sta
     return {
       ...m,
       value: loadingBalance ? "…" : values[i],
+      balanceSubline: i === 3 ? stats.balanceSubline : undefined,
     };
   });
 
@@ -73,6 +77,11 @@ export default function DashboardHero({ firstName, lastName, profileLoading, sta
             <div className="min-w-0 flex-1">
               <p className="text-xs font-normal text-[#666666] md:text-[13px]">{s.label}</p>
               <p className="mt-1 text-xl font-bold tabular-nums leading-none text-black md:text-2xl">{s.value}</p>
+              {s.balanceSubline ? (
+                <p className="mt-1.5 break-all text-[11px] font-medium leading-snug text-[#666666] md:text-xs">
+                  {s.balanceSubline}
+                </p>
+              ) : null}
             </div>
           </div>
         ))}

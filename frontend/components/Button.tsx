@@ -2,7 +2,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type ButtonVariant = "joinNow" | "walletInfo" | "donate" | "follow" | "reportIssue" | "topup";
+type ButtonVariant = "joinNow" | "walletInfo" | "donate" | "follow" | "reportIssue" | "topup" | "withdraw";
 
 type ButtonProps = {
   variant: ButtonVariant;
@@ -23,6 +23,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     "rounded-[12px] bg-primary text-secondary px-5 py-2.5 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
   topup:
     "rounded-[12px] bg-primary text-secondary px-6 py-2.5 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
+  withdraw:
+    "rounded-[12px] border-2 border-secondary bg-white px-6 py-2.5 text-sm font-semibold text-secondary transition-all duration-300 hover:bg-card active:scale-[0.98]",
 };
 
 function WalletIcon() {

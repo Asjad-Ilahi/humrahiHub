@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { MapPin, Flame, Users, Loader2, Plus, X } from "lucide-react";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
-import { createPublicClient, http, isAddress, parseUnits } from "viem";
-import { appChain, APP_CHAIN_NAME, getAppChainRpcUrl } from "@/lib/chain";
+import { isAddress, parseUnits } from "viem";
+import { appChain, APP_CHAIN_NAME } from "@/lib/chain";
 import { formatPkrFromAmount, usdCentsToPkrAmount } from "@/lib/fxPkr";
-import { encodeUsdcTransfer, readUsdcBalance, USDC_BASE_SEPOLIA } from "@/lib/usdcBaseSepolia";
+import { encodeUsdcTransfer, USDC_BASE_SEPOLIA } from "@/lib/usdcBaseSepolia";
 import type { Criticality, Issue } from "../types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
@@ -72,10 +72,6 @@ type Props = {
   onFollowChange: (issueId: string, nextFollowing: boolean) => Promise<void>;
   onInitiate: (issueId: string) => Promise<void>;
 };
-
-function publicClient() {
-  return createPublicClient({ chain: appChain, transport: http(getAppChainRpcUrl()) });
-}
 
 function profileStr(v: unknown): string {
   if (v == null) return "";
