@@ -3,10 +3,12 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "./Button";
+import { useLandingContact } from "./LandingContactProvider";
 
 const heroImages = ["/broken-road.png", "/broken-manhole.png", "/broken-streetlight.png"];
 
 export default function Hero() {
+  const { openContact } = useLandingContact();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -72,7 +74,11 @@ export default function Hero() {
             JOIN NOW
           </Button>
 
-          <button className="group inline-flex items-center gap-4 text-xl font-normal text-text-secondary transition-colors duration-300 hover:text-secondary">
+          <button
+            type="button"
+            onClick={openContact}
+            className="group inline-flex items-center gap-4 text-xl font-normal text-text-secondary transition-colors duration-300 hover:text-secondary"
+          >
             CONTACT US
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stroke transition-transform duration-300 group-hover:translate-x-1">
               ↗

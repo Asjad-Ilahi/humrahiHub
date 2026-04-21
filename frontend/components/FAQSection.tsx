@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useLandingContact } from "./LandingContactProvider";
 
 const faqs = [
   {
@@ -23,6 +24,7 @@ const faqs = [
 ];
 
 export default function FAQSection() {
+  const { openContact } = useLandingContact();
   const [openIndex, setOpenIndex] = useState(0);
 
   return (
@@ -61,12 +63,16 @@ export default function FAQSection() {
         >
           More Questions
         </Link>
-        <Link href="#cta" className="group inline-flex items-center gap-3 text-sm font-medium text-text-secondary">
+        <button
+          type="button"
+          onClick={openContact}
+          className="group inline-flex items-center gap-3 text-sm font-medium text-text-secondary transition-colors hover:text-secondary"
+        >
           CONTACT US
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stroke transition-transform duration-300 group-hover:translate-x-0.5">
             ↗
           </span>
-        </Link>
+        </button>
       </div>
     </section>
   );
