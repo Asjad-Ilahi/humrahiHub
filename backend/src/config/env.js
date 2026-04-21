@@ -61,6 +61,8 @@ const env = {
   coinbaseRampSandbox: process.env.COINBASE_RAMP_SANDBOX !== "false",
   /** HMAC secret from CDP webhook subscription; see https://docs.cdp.coinbase.com/onramp/core-features/webhooks */
   coinbaseWebhookSecret: process.env.COINBASE_WEBHOOK_SECRET || "",
+  /** Shared secret for hackathon admin review UI (`x-admin-token` header). */
+  adminReviewToken: String(process.env.ADMIN_REVIEW_TOKEN || "").trim(),
 };
 
 module.exports = { env };

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
 import { isAddress } from "viem";
@@ -14,12 +14,30 @@ import {
   readSmartWalletAddressForBalance,
 } from "@/features/auth/lib/privyWallet";
 import { APP_CHAIN_NAME } from "@/lib/chain";
+import { useHomeShell } from "@/features/home/context/HomeShellContext";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
 /** Match backend default: sandbox unless COINBASE_RAMP_SANDBOX=false */
 const showCoinbaseSandboxHint = process.env.NEXT_PUBLIC_COINBASE_RAMP_SANDBOX !== "false";
 
 type ProfileTab = "details" | "volunteer" | "settings";
+
+function parseProfileNames(data: unknown): { firstName: string | null; lastName: string | null } {
+  if (!data || typeof data !== "object") return { firstName: null, lastName: null };
+  const row = data as Record<string, unknown>;
+  const fn = typeof row.first_name === "string" ? row.first_name.trim() : "";
+  const ln = typeof row.last_name === "string" ? row.last_name.trim() : "";
+  return {
+    firstName: fn.length > 0 ? fn : null,
+    lastName: ln.length > 0 ? ln : null,
+  };
+}
+
+function formatMenuDisplayName(first: string | null, last: string | null, email: string): string {
+  const parts = [first?.trim(), last?.trim()].filter((p): p is string => Boolean(p && p.length > 0));
+  if (parts.length === 0) return email;
+  return parts.join(" ");
+}
 
 function useDismissRef(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -48,6 +66,7 @@ function WalletTriggerIcon() {
 
 export default function DashboardNavbar() {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const { user, logout } = usePrivy();
   const { client: smartWalletClient } = useSmartWallets();
   const [walletOpen, setWalletOpen] = useState(false);
@@ -56,9 +75,45 @@ export default function DashboardNavbar() {
   const [copied, setCopied] = useState(false);
   const [rampBusy, setRampBusy] = useState<"on" | "off" | null>(null);
   const [rampError, setRampError] = useState<string | null>(null);
+  const [menuFirstName, setMenuFirstName] = useState<string | null>(null);
+  const [menuLastName, setMenuLastName] = useState<string | null>(null);
+  const { mode, setMode, volunteerApproved, isWorkMode } = useHomeShell();
 
   const walletRef = useDismissRef(walletOpen, () => setWalletOpen(false));
   const profileRef = useDismissRef(profileOpen, () => setProfileOpen(false));
+
+  useEffect(() => {
+    if (!user?.id) {
+      setMenuFirstName(null);
+      setMenuLastName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${backendUrl}/api/profiles/${encodeURIComponent(user.id)}`);
+        const body = (await res.json()) as { data?: unknown };
+        if (cancelled || !res.ok) return;
+        const n = parseProfileNames(body.data);
+        setMenuFirstName(n.firstName);
+        setMenuLastName(n.lastName);
+      } catch {
+        if (!cancelled) {
+          setMenuFirstName(null);
+          setMenuLastName(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (volunteerApproved && profileTab === "volunteer") {
+      setProfileTab("details");
+    }
+  }, [volunteerApproved, profileTab]);
 
   const smartAddress = useMemo(
     () => readSmartWalletAddressForBalance(user, smartWalletClient),
@@ -141,19 +196,80 @@ export default function DashboardNavbar() {
     : null;
 
   const email = user?.email?.address ?? "—";
+  const menuDisplayName = formatMenuDisplayName(menuFirstName, menuLastName, email);
+
+  const profileTabs = useMemo(() => {
+    const tabs: [ProfileTab, string][] = [
+      ["details", "Profile"],
+      ["settings", "Settings"],
+    ];
+    if (!volunteerApproved) {
+      tabs.splice(1, 0, ["volunteer", "Become a volunteer"]);
+    }
+    return tabs;
+  }, [volunteerApproved]);
+
+  const showHomeModeSwitch = Boolean(pathname?.startsWith("/home")) && volunteerApproved;
+  const hideReportIssue = isWorkMode;
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-stroke bg-white/95 backdrop-blur-md transition-shadow duration-300 hover:shadow-sm">
       <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-5 py-3 md:px-10">
-        <Link href="/home" className="flex min-w-0 items-center gap-3 transition-opacity duration-200 hover:opacity-90">
+        <Link
+          href="/home"
+          onClick={() => setMode("fundraising")}
+          className="flex min-w-0 items-center gap-3 transition-opacity duration-200 hover:opacity-90"
+        >
           <Image src="/logo.png" alt="" width={44} height={44} className="size-11 shrink-0 rounded-full" />
           <span className="truncate text-xl font-bold tracking-tight text-secondary md:text-2xl">HUMRAHI HUB</span>
         </Link>
 
-        <div className="flex shrink-0 items-center gap-2 md:gap-3">
-          <Button type="button" variant="reportIssue" onClick={() => router.push("/home/report")} className="max-w-[48vw] truncate sm:max-w-none">
-            <span className="truncate">Report Issue</span>
-          </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:gap-3">
+          {showHomeModeSwitch ? (
+            <div
+              className="flex rounded-[12px] border border-stroke bg-card p-0.5"
+              role="group"
+              aria-label="Switch between fundraising home and volunteer work board"
+            >
+              <Link
+                href="/home"
+                className={`min-h-[40px] min-w-0 max-w-[42vw] truncate rounded-[10px] px-2.5 py-2 text-center text-xs font-bold transition-colors sm:max-w-none sm:px-3 sm:text-sm ${
+                  mode === "fundraising" ? "bg-secondary text-primary" : "text-secondary hover:bg-white/80"
+                }`}
+                onClick={() => {
+                  setMode("fundraising");
+                  setWalletOpen(false);
+                  setProfileOpen(false);
+                }}
+              >
+                Fundraising
+              </Link>
+              <Link
+                href="/home/work"
+                className={`min-h-[40px] min-w-0 max-w-[42vw] truncate rounded-[10px] px-2.5 py-2 text-center text-xs font-bold transition-colors sm:max-w-none sm:px-3 sm:text-sm ${
+                  mode === "work" ? "bg-secondary text-primary" : "text-secondary hover:bg-white/80"
+                }`}
+                onClick={() => {
+                  setMode("work");
+                  setWalletOpen(false);
+                  setProfileOpen(false);
+                }}
+              >
+                Work / Volunteer
+              </Link>
+            </div>
+          ) : null}
+
+          {!hideReportIssue ? (
+            <Button
+              type="button"
+              variant="reportIssue"
+              onClick={() => router.push("/home/report")}
+              className="max-w-[48vw] truncate sm:max-w-none"
+            >
+              <span className="truncate">Report Issue</span>
+            </Button>
+          ) : null}
 
           <div className="relative" ref={walletRef}>
             <button
@@ -262,13 +378,7 @@ export default function DashboardNavbar() {
               }`}
             >
               <div className="flex border-b border-stroke p-1">
-                {(
-                  [
-                    ["details", "Details"],
-                    ["volunteer", "Become a volunteer"],
-                    ["settings", "Setting"],
-                  ] as const
-                ).map(([id, label]) => (
+                {profileTabs.map(([id, label]) => (
                   <button
                     key={id}
                     type="button"
@@ -285,13 +395,14 @@ export default function DashboardNavbar() {
                 {profileTab === "details" && (
                   <div className="space-y-3 animate-fade-slide-in">
                     <p className="text-text-secondary">Signed in as</p>
-                    <p className="font-medium text-secondary">{email}</p>
+                    <p className="text-base font-semibold text-secondary">{menuDisplayName}</p>
+                    <p className="text-xs text-text-secondary">{email}</p>
                     <Link
-                      href="/auth"
+                      href="/home/profile"
                       className="inline-flex rounded-full border border-stroke px-4 py-2 text-sm font-semibold text-secondary transition-colors hover:bg-card"
                       onClick={() => setProfileOpen(false)}
                     >
-                      Edit profile
+                      View profile
                     </Link>
                   </div>
                 )}
@@ -306,7 +417,7 @@ export default function DashboardNavbar() {
                       className="w-full !py-2.5 !text-sm"
                       onClick={() => {
                         setProfileOpen(false);
-                        router.push("/auth");
+                        router.push("/home/volunteer");
                       }}
                     >
                       Start volunteer form
@@ -316,6 +427,13 @@ export default function DashboardNavbar() {
                 {profileTab === "settings" && (
                   <div className="space-y-3 animate-fade-slide-in">
                     <p className="text-text-secondary">Session and notifications (demo).</p>
+                    <Link
+                      href="/home/admin"
+                      className="block w-full rounded-[12px] border border-stroke py-2.5 text-center text-sm font-semibold text-secondary transition-colors hover:bg-card"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      Admin review (token)
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {

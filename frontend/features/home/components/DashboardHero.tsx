@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 
 type Stat = {
@@ -20,6 +21,8 @@ type Props = {
   firstName: string | null;
   lastName: string | null;
   profileLoading: boolean;
+  /** Optional control shown on the right (e.g. volunteer work shortcuts). */
+  trailing?: ReactNode;
   stats: {
     totalRaised: string;
     activeProjects: string;
@@ -36,7 +39,7 @@ function buildDisplayName(firstName: string | null, lastName: string | null): st
   return parts.join(" ");
 }
 
-export default function DashboardHero({ firstName, lastName, profileLoading, stats }: Props) {
+export default function DashboardHero({ firstName, lastName, profileLoading, stats, trailing }: Props) {
   const displayName = buildDisplayName(firstName, lastName);
   const statRows: Stat[] = STATS_META.map((m, i) => {
     const values = [stats.totalRaised, stats.activeProjects, stats.communitySupporters, stats.balance] as const;
@@ -51,18 +54,23 @@ export default function DashboardHero({ firstName, lastName, profileLoading, sta
   return (
     <section className="animate-fade-slide-in overflow-hidden rounded-2xl text-black transition-all duration-500 ease-out">
       <div className="px-5 pb-2 pt-6 md:px-8 md:pt-8">
-        {profileLoading ? (
-          <div className="h-8 w-64 max-w-full animate-pulse rounded-md bg-neutral-800" aria-hidden />
-        ) : displayName ? (
-          <h1 className="text-2xl font-semibold tracking-tight text-black md:text-3xl">
-            Welcome back, {displayName}!
-          </h1>
-        ) : (
-          <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Welcome back!</h1>
-        )}
-        <p className="mt-2 max-w-2xl text-sm font-normal leading-relaxed text-[#666666] md:text-[15px]">
-          Amounts on the dashboard are shown in Pakistani rupees (PKR). Your wallet balance is USDC on Base Sepolia.
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div className="min-w-0 flex-1">
+            {profileLoading ? (
+              <div className="h-8 w-64 max-w-full animate-pulse rounded-md bg-neutral-800" aria-hidden />
+            ) : displayName ? (
+              <h1 className="text-2xl font-semibold tracking-tight text-black md:text-3xl">
+                Welcome back, {displayName}!
+              </h1>
+            ) : (
+              <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Welcome back!</h1>
+            )}
+            <p className="mt-2 max-w-2xl text-sm font-normal leading-relaxed text-[#666666] md:text-[15px]">
+              Amounts on the dashboard are shown in Pakistani rupees (PKR). Your wallet balance is USDC on Base Sepolia.
+            </p>
+          </div>
+          {trailing ? <div className="shrink-0 sm:pt-1">{trailing}</div> : null}
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-1 divide-y divide-stroke border-t border-stroke border-b sm:grid-cols-2 lg:mt-6 lg:grid-cols-4 lg:divide-x lg:divide-y-0 lg:divide-stroke">
@@ -77,11 +85,6 @@ export default function DashboardHero({ firstName, lastName, profileLoading, sta
             <div className="min-w-0 flex-1">
               <p className="text-xs font-normal text-[#666666] md:text-[13px]">{s.label}</p>
               <p className="mt-1 text-xl font-bold tabular-nums leading-none text-black md:text-2xl">{s.value}</p>
-              {s.balanceSubline ? (
-                <p className="mt-1.5 break-all text-[11px] font-medium leading-snug text-[#666666] md:text-xs">
-                  {s.balanceSubline}
-                </p>
-              ) : null}
             </div>
           </div>
         ))}

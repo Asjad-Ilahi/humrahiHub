@@ -82,3 +82,22 @@ export function formatPkrFromAmount(amount: number, opts?: { maximumFractionDigi
     maximumFractionDigits: max,
   }).format(amount);
 }
+
+/**
+ * Converts a PKR amount entered by the user into a USDC (≈ USD) decimal string for `parseUnits(..., 6)`.
+ * Uses the same PKR/USD rate as the rest of the app.
+ */
+export function pkrToUsdcHumanForDonation(pkr: number, pkrPerUsd: number): string {
+  if (!Number.isFinite(pkr) || pkr <= 0) {
+    throw new Error("Enter a positive PKR amount.");
+  }
+  if (!Number.isFinite(pkrPerUsd) || pkrPerUsd <= 0) {
+    throw new Error("Exchange rate is not ready yet. Wait a moment and try again.");
+  }
+  const usd = pkr / pkrPerUsd;
+  const micros = Math.round(usd * 1_000_000);
+  if (micros < 1) {
+    throw new Error("That PKR amount is too small to send as USDC on-chain.");
+  }
+  return (micros / 1_000_000).toFixed(6);
+}

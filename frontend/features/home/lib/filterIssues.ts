@@ -1,6 +1,13 @@
 import type { Criticality, Issue, IssueCategory, IssuePhaseKey, SortMode } from "../types";
 
-const ALL_PHASES: IssuePhaseKey[] = ["needs_initiation", "fundraising", "in_progress", "completed"];
+const ALL_PHASES: IssuePhaseKey[] = [
+  "needs_initiation",
+  "fundraising",
+  "accepting_proposals",
+  "proposal_voting",
+  "in_progress",
+  "completed",
+];
 
 function matchesSearch(issue: Issue, q: string): boolean {
   const s = q.trim().toLowerCase();

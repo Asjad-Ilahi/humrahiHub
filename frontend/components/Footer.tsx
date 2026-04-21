@@ -5,7 +5,7 @@ import { Globe, Mail, MapPin, MessageCircle, Phone, Send, Share2 } from "lucide-
 export default function Footer() {
   return (
     <footer className="bg-white">
-      <div className="mx-auto grid w-full max-w-[1280px] gap-10 px-8 py-16 md:grid-cols-[1.85fr_1fr_1fr_1.1fr]">
+      <div className="mx-auto grid w-full max-w-[1280px] gap-10 px-8 py-16 md:grid-cols-[3fr_1fr_1fr_1.1fr]">
         <div>
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="HumRahi hub logo" width={40} height={40} />
@@ -24,8 +24,8 @@ export default function Footer() {
         </div>
 
         <div>
-          <h4 className="text-[30px] font-bold text-secondary">Navigation</h4>
-          <div className="mt-7 space-y-3.5 text-[21px] text-text-secondary">
+          <h4 className="text-[16px] font-bold text-secondary">Navigation</h4>
+          <div className="mt-7 space-y-3.5 text-[12px] text-text-secondary">
             <Link href="/">What we Do</Link>
             <div>How it Works</div>
             <div>Our Trust</div>
@@ -35,8 +35,8 @@ export default function Footer() {
         </div>
 
         <div>
-          <h4 className="text-[30px] font-bold text-secondary">Licence</h4>
-          <div className="mt-7 space-y-3.5 text-[21px] text-text-secondary">
+          <h4 className="text-[16px] font-bold text-secondary">Licence</h4>
+          <div className="mt-7 space-y-3.5 text-[12px] text-text-secondary">
             <div>Privacy Policy</div>
             <div>Copyright</div>
             <div>Terms and Conditions</div>
@@ -44,8 +44,8 @@ export default function Footer() {
         </div>
 
         <div>
-          <h4 className="text-[30px] font-bold text-secondary">Contact</h4>
-          <div className="mt-7 space-y-3.5 text-[21px] text-text-secondary">
+          <h4 className="text-[16px] font-bold text-secondary">Contact</h4>
+          <div className="mt-7 space-y-3.5 text-[12px] text-text-secondary">
             <div className="flex items-center gap-3">
               <Phone size={18} className="text-secondary" />
               <span>+92 326 0362844</span>

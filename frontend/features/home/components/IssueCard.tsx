@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import { MapPin, Flame, Users, Loader2, Plus, X } from "lucide-react";
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
-import { isAddress, parseUnits } from "viem";
-import { appChain, APP_CHAIN_NAME } from "@/lib/chain";
+import { useRouter } from "next/navigation";
+import { MapPin, Flame, Users, Loader2, Plus, Send, X, Vote } from "lucide-react";
+import { useHomeShell } from "@/features/home/context/HomeShellContext";
 import { formatPkrFromAmount, usdCentsToPkrAmount } from "@/lib/fxPkr";
-import { encodeUsdcTransfer, USDC_BASE_SEPOLIA } from "@/lib/usdcBaseSepolia";
 import type { Criticality, Issue } from "../types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
@@ -111,35 +109,43 @@ function CreatorProfileFields({ profile }: { profile: Record<string, unknown> })
 }
 
 export default function IssueCard({ issue, viewerPrivyId, pkrPerUsd, onFollowChange, onInitiate }: Props) {
-  const { client: smartWalletClient, getClientForChain } = useSmartWallets();
+  const router = useRouter();
+  const { isWorkMode, volunteerApproved } = useHomeShell();
   const pct =
     issue.goalCents > 0 ? Math.min(100, Math.round((issue.raisedCents / issue.goalCents) * 100)) : 0;
   const reporter = (issue.raisedBy ?? "").trim();
   const [initBusy, setInitBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
-  const [donateOpen, setDonateOpen] = useState(false);
-  const [donateUsdc, setDonateUsdc] = useState("10");
-  const [donateBusy, setDonateBusy] = useState(false);
-  const [donateMsg, setDonateMsg] = useState<string | null>(null);
   const [creatorDialogOpen, setCreatorDialogOpen] = useState(false);
   const [creatorProfileLoading, setCreatorProfileLoading] = useState(false);
   const [creatorProfile, setCreatorProfile] = useState<Record<string, unknown> | null>(null);
 
-  const treasury = issue.smartWalletAddress?.trim() ?? "";
-  const canDonateOnChain = Boolean(treasury && isAddress(treasury));
+  const goIssuePage = (e?: { stopPropagation: () => void }) => {
+    e?.stopPropagation();
+    router.push(`/home/issue/${issue.id}`);
+  };
 
   const inInitiationPhase = issue.phaseKey === "needs_initiation";
   const showInitiate =
     inInitiationPhase && !issue.isCreator && Boolean(viewerPrivyId) && !issue.userHasInitiated;
   const showInitiationMeter = inInitiationPhase;
-  const showDonateFollow = !inInitiationPhase;
+  const acceptingProposals = issue.phaseKey === "accepting_proposals";
+  const proposalVoting = issue.phaseKey === "proposal_voting";
+  const inProgress = issue.phaseKey === "in_progress";
+  const completed = issue.phaseKey === "completed";
+  const canSendProposal = acceptingProposals && isWorkMode && volunteerApproved && Boolean(viewerPrivyId);
+  const fundraising = issue.phaseKey === "fundraising";
+  const showDonate = fundraising;
+  const showFollow = fundraising;
 
   useEffect(() => {
     if (!creatorDialogOpen || !issue.creatorPrivyUserId) return;
     let cancelled = false;
-    setCreatorProfileLoading(true);
-    setCreatorProfile(null);
     void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      setCreatorProfileLoading(true);
+      setCreatorProfile(null);
       try {
         const res = await fetch(`${backendUrl}/api/profiles/${encodeURIComponent(issue.creatorPrivyUserId)}`);
         const body = (await res.json()) as { data?: Record<string, unknown> | null };
@@ -173,62 +179,11 @@ export default function IssueCard({ issue, viewerPrivyId, pkrPerUsd, onFollowCha
     }
   };
 
-  const handleDonateSend = useCallback(async () => {
-    setDonateMsg(null);
-    if (!canDonateOnChain) {
-      setDonateMsg("Fund wallet address is not available yet.");
-      return;
-    }
-    const raw = donateUsdc.trim().replace(",", ".");
-    let units: bigint;
-    try {
-      units = parseUnits(raw === "" ? "0" : raw, 6);
-    } catch {
-      setDonateMsg("Enter a valid USDC amount (e.g. 5 or 2.5).");
-      return;
-    }
-    if (units <= BigInt(0)) {
-      setDonateMsg("Amount must be greater than zero.");
-      return;
-    }
-    let data: `0x${string}`;
-    try {
-      data = encodeUsdcTransfer(treasury as `0x${string}`, raw === "" ? "0" : raw);
-    } catch {
-      setDonateMsg("Enter a valid USDC amount (e.g. 5 or 2.5).");
-      return;
-    }
-
-    let client = smartWalletClient ?? (await getClientForChain({ id: appChain.id }));
-    if (!client) {
-      setDonateMsg("Connect your smart wallet first.");
-      return;
-    }
-    setDonateBusy(true);
-    try {
-      const switcher = client as { switchChain?: (args: { id: number }) => Promise<void> };
-      if (typeof switcher.switchChain === "function") {
-        try {
-          await switcher.switchChain({ id: appChain.id });
-        } catch {
-          /* chain may already match */
-        }
-      }
-      const hash = await client.sendTransaction({
-        to: USDC_BASE_SEPOLIA,
-        data,
-        chain: appChain,
-      });
-      setDonateMsg(`USDC sent · ${hash.slice(0, 10)}…`);
-    } catch (e) {
-      setDonateMsg(e instanceof Error ? e.message : "Transaction failed.");
-    } finally {
-      setDonateBusy(false);
-    }
-  }, [canDonateOnChain, donateUsdc, getClientForChain, smartWalletClient, treasury]);
-
   return (
-    <article className="group relative h-[480px] overflow-hidden rounded-[32px] border border-stroke bg-white transition-transform duration-300 ease-out hover:-translate-y-1">
+    <article
+      className="group relative h-[480px] cursor-pointer overflow-hidden rounded-[32px] border border-stroke bg-white transition-transform duration-300 ease-out hover:-translate-y-1"
+      onClick={() => goIssuePage()}
+    >
       <div className="absolute inset-x-0 top-0 z-0 h-[220px]">
         {issue.imageSrc ? (
           <Image
@@ -285,7 +240,11 @@ export default function IssueCard({ issue, viewerPrivyId, pkrPerUsd, onFollowCha
                 {reporter ? (
                   <button
                     type="button"
-                    onClick={() => setCreatorDialogOpen(true)}
+                    data-no-issue-nav
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCreatorDialogOpen(true);
+                    }}
                     className="max-w-[min(100%,12rem)] truncate text-left font-medium text-secondary underline decoration-stroke underline-offset-2 transition-colors hover:text-text-secondary"
                   >
                     {reporter}
@@ -322,39 +281,17 @@ export default function IssueCard({ issue, viewerPrivyId, pkrPerUsd, onFollowCha
           </div>
         </div>
 
-          {showDonateFollow && donateOpen && canDonateOnChain ? (
-            <div className="mt-3 rounded-[14px] border border-stroke bg-card/80 px-3 py-3 text-xs">
-              <p className="font-semibold text-secondary">Donate USDC ({APP_CHAIN_NAME})</p>
-              <p className="mt-1 text-text-secondary">Send USDC from your wallet to this project address.</p>
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={donateUsdc}
-                  onChange={(e) => setDonateUsdc(e.target.value)}
-                  className="min-w-0 flex-1 rounded-full border border-stroke bg-white px-3 py-2 font-mono text-secondary outline-none focus:ring-2 focus:ring-primary/40"
-                  aria-label="USDC amount"
-                />
-                <button
-                  type="button"
-                  disabled={donateBusy}
-                  onClick={() => void handleDonateSend()}
-                  className="shrink-0 rounded-full bg-secondary px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50"
-                >
-                  {donateBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : "Send"}
-                </button>
-              </div>
-              {donateMsg ? <p className="mt-2 text-[11px] text-secondary">{donateMsg}</p> : null}
-            </div>
-          ) : null}
-
           <div className="mt-auto flex shrink-0 flex-col gap-2 pt-4">
             {inInitiationPhase ? (
               <>
                 {showInitiate ? (
                   <button
                     type="button"
-                    onClick={() => void handleInitiate()}
+                    data-no-issue-nav
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleInitiate();
+                    }}
                     disabled={initBusy}
                     className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99] disabled:opacity-50"
                   >
@@ -386,30 +323,99 @@ export default function IssueCard({ issue, viewerPrivyId, pkrPerUsd, onFollowCha
                 ) : null}
               </>
             ) : (
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={!canDonateOnChain}
-                  onClick={() => {
-                    setDonateOpen((o) => !o);
-                    setDonateMsg(null);
-                  }}
-                  className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {donateOpen ? "Close" : "Donate"}
-                  <Image src="/donate.svg" alt="" width={14} height={14} className="shrink-0" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleFollow()}
-                  disabled={followBusy}
-                  className={`inline-flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-semibold transition-transform duration-300 hover:-translate-y-0.5 disabled:opacity-50 ${
-                    issue.userFollowing ? "bg-secondary text-primary" : "bg-[#e8e8e8] text-secondary"
-                  }`}
-                >
-                  {issue.userFollowing ? "Following" : "Follow"}
-                  {!issue.userFollowing ? <span className="text-lg font-bold leading-none">+</span> : null}
-                </button>
+              <div className="flex flex-col gap-2">
+                {acceptingProposals ? (
+                  <div data-no-issue-nav onClick={(e) => e.stopPropagation()} className="w-full">
+                    {canSendProposal ? (
+                      <button
+                        type="button"
+                        onClick={(e) => goIssuePage(e)}
+                        className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99]"
+                      >
+                        <Send className="size-5 shrink-0" strokeWidth={2} aria-hidden />
+                        Send proposal
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        title={
+                          !viewerPrivyId
+                            ? "Sign in to use volunteer tools."
+                            : !volunteerApproved
+                              ? "Approved volunteers only. Apply from your profile."
+                              : "Switch to Work / Volunteer in the header to submit."
+                        }
+                        className="inline-flex min-h-[48px] w-full cursor-not-allowed items-center justify-center gap-2 rounded-full border border-stroke bg-[#ececec] px-4 py-3 text-base font-semibold text-text-secondary opacity-60"
+                      >
+                        <Send className="size-5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
+                        Send proposal
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+                {proposalVoting && issue.userHasDonated ? (
+                  <button
+                    type="button"
+                    onClick={(e) => goIssuePage(e)}
+                    className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99]"
+                  >
+                    <Vote className="size-5 shrink-0" strokeWidth={2} aria-hidden />
+                    Vote on proposals
+                  </button>
+                ) : null}
+                {proposalVoting && viewerPrivyId && !issue.userHasDonated ? (
+                  <p className="py-2 text-center text-xs text-text-secondary">Proposal voting — donors who supported this project can vote.</p>
+                ) : null}
+                {inProgress ? (
+                  <button
+                    type="button"
+                    onClick={(e) => goIssuePage(e)}
+                    className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99]"
+                  >
+                    View
+                  </button>
+                ) : null}
+                {completed ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex min-h-[48px] w-full cursor-not-allowed items-center justify-center gap-2 rounded-full border border-stroke bg-[#ececec] px-4 py-3 text-base font-semibold text-text-secondary opacity-70"
+                  >
+                    Completed
+                  </button>
+                ) : null}
+                {(showDonate || showFollow) && (
+                  <div className="flex items-center gap-3">
+                    {showDonate ? (
+                      <button
+                        type="button"
+                        onClick={(e) => goIssuePage(e)}
+                        className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-[#B1FF67] px-4 py-3 text-base font-semibold text-secondary transition-transform duration-300 hover:-translate-y-0.5 active:scale-[0.99]"
+                      >
+                        Donate
+                        <Image src="/donate.svg" alt="" width={14} height={14} className="shrink-0" />
+                      </button>
+                    ) : null}
+                    {showFollow ? (
+                      <button
+                        type="button"
+                        data-no-issue-nav
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleFollow();
+                        }}
+                        disabled={followBusy}
+                        className={`inline-flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-3 text-sm font-semibold transition-transform duration-300 hover:-translate-y-0.5 disabled:opacity-50 ${
+                          issue.userFollowing ? "bg-secondary text-primary" : "bg-[#e8e8e8] text-secondary"
+                        }`}
+                      >
+                        {issue.userFollowing ? "Following" : "Follow"}
+                        {!issue.userFollowing ? <span className="text-lg font-bold leading-none">+</span> : null}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             )}
           </div>

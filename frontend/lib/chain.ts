@@ -19,10 +19,23 @@ function alchemyKey(): string | undefined {
   return k && k.length > 0 ? k : undefined;
 }
 
+/**
+ * Alchemy gas-manager / paymaster policies are tied to a specific network. If the app uses Base Sepolia
+ * but an env or upstream tool pointed bundler/paymaster at `base-mainnet`, `pm_getPaymasterData` fails
+ * (wrong policy / chain). Coerce known bad hosts for this chain.
+ */
+export function normalizeAlchemyUrlForAppChain(url: string): string {
+  const u = String(url ?? "").trim();
+  if (appChain.id !== baseSepolia.id) return u;
+  return u.replace(/https:\/\/base-mainnet\.g\.alchemy\.com/gi, "https://base-sepolia.g.alchemy.com");
+}
+
 /** Direct JSON-RPC URL (server, scripts, or bundler). Prefer {@link getAppChainReadRpcUrl} in the browser. */
 export function getAppChainRpcUrl(): string {
   const key = alchemyKey();
-  return key ? `https://base-sepolia.g.alchemy.com/v2/${key}` : BASE_SEPOLIA_PUBLIC_RPC;
+  return key
+    ? normalizeAlchemyUrlForAppChain(`https://base-sepolia.g.alchemy.com/v2/${key}`)
+    : BASE_SEPOLIA_PUBLIC_RPC;
 }
 
 /**
@@ -47,13 +60,20 @@ export function createAppChainPublicReadClient() {
   });
 }
 
-/** Alchemy bundler base (append /v2/{key} is same host as RPC for many accounts APIs). */
+/** Optional override, e.g. `https://base-sepolia.g.alchemy.com/v2/YOUR_KEY` (see {@link normalizeAlchemyUrlForAppChain}). */
 export function getAlchemyBundlerHttpUrl(): string | undefined {
+  const override = String(process.env.NEXT_PUBLIC_ALCHEMY_BUNDLER_URL ?? "").trim();
+  if (override.length > 0) return normalizeAlchemyUrlForAppChain(override);
   const key = alchemyKey();
-  return key ? `https://base-sepolia.g.alchemy.com/v2/${key}` : undefined;
+  if (!key) return undefined;
+  return normalizeAlchemyUrlForAppChain(`https://base-sepolia.g.alchemy.com/v2/${key}`);
 }
 
+/** Optional override, e.g. `https://base-sepolia.g.alchemy.com/paymaster/v2/YOUR_KEY`. */
 export function getAlchemyPaymasterHttpUrl(): string | undefined {
+  const override = String(process.env.NEXT_PUBLIC_ALCHEMY_PAYMASTER_URL ?? "").trim();
+  if (override.length > 0) return normalizeAlchemyUrlForAppChain(override);
   const key = alchemyKey();
-  return key ? `https://base-sepolia.g.alchemy.com/paymaster/v2/${key}` : undefined;
+  if (!key) return undefined;
+  return normalizeAlchemyUrlForAppChain(`https://base-sepolia.g.alchemy.com/paymaster/v2/${key}`);
 }

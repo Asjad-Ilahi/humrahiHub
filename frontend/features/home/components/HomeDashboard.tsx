@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ChevronDown, Filter, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
@@ -26,6 +27,7 @@ import type { ApiIssueRow } from "../lib/mapApiIssue";
 import { mapApiIssueRow as mapRow } from "../lib/mapApiIssue";
 import type { Criticality, Issue, IssueCategory, IssuePhaseKey, SortMode } from "../types";
 import { resolveBestLatLngFromQuery } from "@/lib/geo";
+import { useHomeShell } from "../context/HomeShellContext";
 import DashboardHero from "./DashboardHero";
 import IssueCard from "./IssueCard";
 
@@ -79,6 +81,8 @@ const SORT_LABELS: Record<SortMode, string> = {
 const PHASE_FILTER_LABELS: Record<IssuePhaseKey, string> = {
   needs_initiation: "Needs initiation",
   fundraising: "Fundraising",
+  accepting_proposals: "Accepting proposals",
+  proposal_voting: "Proposal voting",
   in_progress: "In progress",
   completed: "Completed",
 };
@@ -99,8 +103,11 @@ const SORT_ORDER: SortMode[] = [
 
 const PAGE_SIZE = 6;
 
-export default function HomeDashboard() {
+export type HomeDashboardVariant = "default" | "work";
+
+export default function HomeDashboard({ variant = "default" }: { variant?: HomeDashboardVariant }) {
   const { ready, authenticated, user } = usePrivy();
+  const { volunteerApproved } = useHomeShell();
   const { client: smartWalletClient, getClientForChain } = useSmartWallets();
 
   const [profileFirstName, setProfileFirstName] = useState<string | null>(null);
@@ -504,7 +511,11 @@ export default function HomeDashboard() {
   const [criticalities, setCriticalities] = useState<Set<Criticality>>(
     () => new Set(["low", "medium", "critical"])
   );
-  const [phases, setPhases] = useState<Set<IssuePhaseKey>>(() => new Set(ALL_PHASES));
+  const [phases, setPhases] = useState<Set<IssuePhaseKey>>(() =>
+    variant === "work"
+      ? new Set<IssuePhaseKey>(["accepting_proposals", "proposal_voting"])
+      : new Set<IssuePhaseKey>(ALL_PHASES)
+  );
   const [radiusKm, setRadiusKm] = useState(2);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -624,11 +635,41 @@ export default function HomeDashboard() {
           balanceLoading: balanceLoading,
           balanceSubline,
         }}
+        trailing={
+          variant === "work" && volunteerApproved ? (
+            <Link
+              href="/home/work/my-proposals"
+              className="inline-flex w-full items-center justify-center rounded-full border border-stroke bg-[#B1FF67] px-4 py-2.5 text-sm font-semibold text-secondary shadow-sm transition-transform hover:-translate-y-0.5 sm:w-auto"
+            >
+              View your accepted proposals
+            </Link>
+          ) : undefined
+        }
       />
 
       {walletNotice && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">{walletNotice}</p>
       )}
+
+      {variant === "work" ? (
+        <div className="rounded-xl border border-stroke bg-card px-4 py-4 text-sm text-secondary md:px-5">
+          <p className="font-semibold text-secondary">Volunteer work board</p>
+          <p className="mt-1.5 leading-relaxed text-text-secondary">
+            These listings are in the <span className="font-semibold text-secondary">accepting proposals</span> phase
+            (a short window after a project meets its fundraising goal). Filters and cards match the home dashboard; the
+            distance slider defaults to 2 km like home.
+          </p>
+          {!volunteerApproved ? (
+            <p className="mt-3 text-xs text-text-secondary">
+              Become an approved volunteer to submit milestone-based work proposals on each issue page.{" "}
+              <a href="/home/volunteer" className="font-semibold text-secondary underline underline-offset-2">
+                Apply here
+              </a>
+              .
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {issuesError && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{issuesError}</p>

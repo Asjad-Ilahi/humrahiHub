@@ -3,6 +3,7 @@ const cors = require("cors");
 const { healthRoutes } = require("./routes/healthRoutes");
 const { profileRoutes } = require("./routes/profileRoutes");
 const { issueRoutes } = require("./routes/issueRoutes");
+const { volunteerRoutes } = require("./routes/volunteerRoutes");
 const { coinbaseRampRoutes } = require("./routes/coinbaseRampRoutes");
 const { postCoinbaseOnrampWebhook } = require("./controllers/coinbaseWebhookController");
 
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use(healthRoutes);
 app.use(profileRoutes);
 app.use(issueRoutes);
+app.use(volunteerRoutes);
 app.use(coinbaseRampRoutes);
 
 module.exports = { app };
